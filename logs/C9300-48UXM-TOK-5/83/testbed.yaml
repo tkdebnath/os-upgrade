@@ -1,0 +1,12 @@
+devices:
+  C9300-48UXM-TOK-5:
+    connections:
+      cli:
+        credentials:
+          default:
+            password: ''
+            username: ''
+        ip: 10.115.213.242
+        protocol: ssh
+    os: IOS-XE
+    type: switch

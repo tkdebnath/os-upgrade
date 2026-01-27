@@ -1,0 +1,12 @@
+devices:
+  C9300Uxm-Switch-7:
+    connections:
+      cli:
+        credentials:
+          default:
+            password: password
+            username: admin
+        ip: 10.10.10.7
+        protocol: ssh
+    os: iosxe
+    type: switch

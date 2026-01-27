@@ -1,0 +1,12 @@
+devices:
+  C9300-48UXM-NEW-7:
+    connections:
+      cli:
+        credentials:
+          default:
+            password: ''
+            username: ''
+        ip: 10.241.230.224
+        protocol: ssh
+    os: IOS-XE
+    type: switch

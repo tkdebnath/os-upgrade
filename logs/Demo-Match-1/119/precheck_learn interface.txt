@@ -1,0 +1,4 @@
+Mock Output for learn interface
+Timestamp: 2026-01-25 04:05:24.690847+00:00
+Status: SUCCESS
+Simulated Data: Route 10.10.10.0/24

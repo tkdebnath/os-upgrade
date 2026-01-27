@@ -1,0 +1,115 @@
+import os
+import difflib
+import logging
+from swim_backend.core.models import Job
+from django.utils import timezone
+
+logger = logging.getLogger(__name__)
+
+# Try to import Genie Diff, fallback to difflib
+try:
+    from genie.diff import Diff
+    HAS_GENIE_DIFF = True
+except ImportError:
+    HAS_GENIE_DIFF = False
+
+def log_update(job_id, message):
+    try:
+        job = Job.objects.get(id=job_id)
+        timestamp = timezone.now().strftime("%Y-%m-%d %H:%M:%S")
+        entry = f"[{timestamp}] {message}\n"
+        job.log += entry
+        job.save()
+    except Job.DoesNotExist:
+        pass
+
+import subprocess
+
+def generate_diffs(job, checks, log_dir):
+    """
+    Compares pre and post check directories using 'genie diff' CLI.
+    Falls back to per-file python comparison if CLI fails.
+    """
+    pre_dir = os.path.join(log_dir, "precheck")
+    post_dir = os.path.join(log_dir, "postcheck")
+    diff_dir = os.path.join(log_dir, "diffs")
+    
+    if os.path.exists(pre_dir) and os.path.exists(post_dir):
+        # Method 1: Try Genie CLI (Directory Diff)
+        # matches user request: "genie diff pre post --output diff"
+        cli_success = False
+        try:
+            os.makedirs(diff_dir, exist_ok=True)
+            # Assuming 'genie' is in path. 
+            cmd = ["genie", "diff", pre_dir, post_dir, "--output", diff_dir]
+            logger.info(f"Running Genie Diff CLI: {' '.join(cmd)}")
+            
+            # Run command
+            result = subprocess.run(cmd, capture_output=True, text=True)
+            
+            if result.returncode == 0:
+                log_update(job.id, "Genie Diff (CLI) generated successfully.")
+                cli_success = True
+            else:
+                logger.warning(f"Genie Diff CLI failed (code {result.returncode}): {result.stderr}")
+        except Exception as e:
+            logger.warning(f"Failed to run Genie Diff CLI: {e}")
+
+        if cli_success:
+            return
+
+        # Method 2: Fallback to Per-File Python Logic
+        log_update(job.id, "Genie CLI diff failed or not available. Falling back to internal diff.")
+        
+        for check in checks:
+            if check.category == 'genie':
+                # Construct Genie Filename
+                feature = check.command
+                hostname = job.device.hostname
+                dev_os = job.device.platform if job.device.platform else 'iosxe'
+                filename = f"{feature}_{dev_os}_{hostname}_ops.txt"
+            else:
+                # Construct Custom Filename
+                safe_name = "".join(c if c.isalnum() else "_" for c in check.name)
+                filename = f"{safe_name}.txt"
+            
+            pre_file = os.path.join(pre_dir, filename)
+            post_file = os.path.join(post_dir, filename)
+            
+            # Diff filename
+            diff_safe_name = "".join(c if c.isalnum() else "_" for c in check.name)
+            diff_file = os.path.join(diff_dir, f"diff_{diff_safe_name}.txt")
+            
+            if os.path.exists(pre_file) and os.path.exists(post_file):
+                diff_content = ""
+                
+                if HAS_GENIE_DIFF:
+                    try:
+                        # Genie Python Diff
+                        diff_obj = Diff(pre_file, post_file)
+                        diff_obj.diff()
+                        diff_content = str(diff_obj)
+                    except Exception as e:
+                        pass
+
+                if not diff_content:
+                    # Text Diff Fallback
+                    with open(pre_file, 'r') as f1, open(post_file, 'r') as f2:
+                        pre_lines = f1.readlines()
+                        post_lines = f2.readlines()
+                        
+                    diff = difflib.unified_diff(
+                        pre_lines, post_lines,
+                        fromfile=f'Pre-Check {check.name}',
+                        tofile=f'Post-Check {check.name}',
+                        lineterm=''
+                    )
+                    diff_content = '\n'.join(list(diff))
+                
+                if not diff_content or diff_content.strip() == "":
+                    diff_content = f"No differences found for {check.name}."
+                    
+                with open(diff_file, 'w') as f:
+                    f.write(diff_content)
+                
+                log_update(job.id, f"Generated fallback diff for {check.name}.")

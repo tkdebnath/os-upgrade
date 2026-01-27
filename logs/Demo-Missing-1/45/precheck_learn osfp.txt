@@ -1,0 +1,4 @@
+Mock Output for learn osfp
+Timestamp: 2026-01-25 03:34:24.859418+00:00
+Status: SUCCESS
+Simulated Data: Route 10.10.10.0/24

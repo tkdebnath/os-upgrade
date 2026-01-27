@@ -1,0 +1,12 @@
+devices:
+  Demo-SizeMismatch-1:
+    connections:
+      cli:
+        credentials:
+          default:
+            password: ''
+            username: ''
+        ip: 10.10.10.4
+        protocol: ssh
+    os: iosxe
+    type: switch
