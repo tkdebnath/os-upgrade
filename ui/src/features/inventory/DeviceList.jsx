@@ -345,7 +345,7 @@ const Devices = () => {
                                 <SortableHeader label="Compliance" sortKey="compliance_status" currentSort={sortConfig} onSort={requestSort} />
                                 {focusMode === 'Software Images' && (
                                     <>
-                                        <SortableHeader label="Software Image" sortKey="platform" currentSort={sortConfig} onSort={requestSort} />
+                                        <SortableHeader label="Boot Method" sortKey="boot_method" currentSort={sortConfig} onSort={requestSort} />
                                         <SortableHeader label="Image Version" sortKey="version" currentSort={sortConfig} onSort={requestSort} />
                                     </>
                                 )}
@@ -423,25 +423,82 @@ const Devices = () => {
                                             </div>
                                         </td>
                                         <td className="p-4">
-                                            <span className={`text-xs font-bold px-2 py-1 rounded-full ${dev.compliance_status === 'Compliant' ? 'bg-green-100 text-green-700' :
-                                                dev.compliance_status === 'Non-Compliant' ? 'bg-red-100 text-red-700' :
-                                                    'bg-gray-100 text-gray-500'
-                                                }`}>
-                                                {dev.compliance_status || 'No Standard'}
-                                            </span>
+                                            {(() => {
+                                                const golden = dev.golden_image ? dev.golden_image.version : null;
+                                                const current = dev.version;
+
+                                                // Default/Fallback from backend if needed, or calculate here
+                                                const status = dev.compliance_status;
+
+                                                // If we have explicit golden image data, we calculate detailed status
+                                                if (!golden) {
+                                                    return (
+                                                        <span className="text-xs font-bold px-2 py-1 rounded-full bg-gray-100 text-gray-500">
+                                                            No Standard
+                                                        </span>
+                                                    );
+                                                }
+
+                                                // Simple version comparison helper
+                                                const compareVersions = (v1, v2) => {
+                                                    if (!v1 || !v2) return 0;
+                                                    const p1 = v1.toString().split(/[\.-]/); // Split by dot or dash
+                                                    const p2 = v2.toString().split(/[\.-]/);
+
+                                                    for (let i = 0; i < Math.max(p1.length, p2.length); i++) {
+                                                        const val1 = p1[i] || '';
+                                                        const val2 = p2[i] || '';
+
+                                                        // Try numeric comparison first
+                                                        const n1 = parseInt(val1);
+                                                        const n2 = parseInt(val2);
+
+                                                        if (!isNaN(n1) && !isNaN(n2)) {
+                                                            if (n1 > n2) return 1;
+                                                            if (n1 < n2) return -1;
+                                                        } else {
+                                                            // Lexicographical comparison for non-numeric parts (e.g. '4a' vs '4')
+                                                            if (val1 > val2) return 1;
+                                                            if (val1 < val2) return -1;
+                                                        }
+                                                    }
+                                                    return 0;
+                                                };
+
+                                                const comparison = compareVersions(current, golden);
+
+                                                if (comparison < 0) {
+                                                    return (
+                                                        <span className="text-xs font-bold px-2 py-1 rounded-full bg-orange-100 text-orange-700" title={`Target: ${golden}`}>
+                                                            Outdated
+                                                        </span>
+                                                    );
+                                                } else if (comparison > 0) {
+                                                    return (
+                                                        <span className="text-xs font-bold px-2 py-1 rounded-full bg-blue-100 text-blue-700" title={`Target: ${golden}`}>
+                                                            Ahead of Standard
+                                                        </span>
+                                                    );
+                                                } else {
+                                                    return (
+                                                        <span className="text-xs font-bold px-2 py-1 rounded-full bg-green-100 text-green-700">
+                                                            Up to Date
+                                                        </span>
+                                                    );
+                                                }
+                                            })()}
                                         </td>
                                         {focusMode === 'Software Images' && (
                                             <>
                                                 <td className="p-4 text-gray-600 text-xs">
-                                                    <div className="flex flex-col">
-                                                        <span>{dev.platform}-universalk9-{dev.version}</span>
-                                                        <span className="text-orange-500 text-[10px] border border-orange-200 bg-orange-50 px-1 rounded w-max mt-1">Needs Update</span>
-                                                    </div>
+                                                    <span title={dev.boot_method}>{dev.boot_method || 'Unknown'}</span>
                                                 </td>
-                                                <td className="p-4 text-gray-600">{dev.version || '16.9.1'}</td>
+                                                <td className="p-4 text-gray-600">
+                                                    {dev.version || '16.9.1'}
+                                                </td>
                                             </>
                                         )}
-                                        <td className="p-4 text-gray-400 text-xs font-mono uppercase">00:50:56:88:45:12</td>
+                                        <td className="p-4 text-gray-400 text-xs font-mono uppercase">{dev.mac_address || '-'}</td>
                                     </tr>
                                 ))
                             ) : (

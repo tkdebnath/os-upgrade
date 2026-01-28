@@ -50,7 +50,6 @@ class Job(models.Model):
     ]
 
     device = models.ForeignKey(Device, on_delete=models.CASCADE, related_name='jobs')
-    device = models.ForeignKey(Device, on_delete=models.CASCADE, related_name='jobs')
     image = models.ForeignKey(Image, on_delete=models.SET_NULL, null=True, blank=True)
     file_server = models.ForeignKey(FileServer, on_delete=models.SET_NULL, null=True, blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')

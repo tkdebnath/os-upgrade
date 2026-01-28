@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { CheckCircle, AlertTriangle, ArrowRight, ArrowLeft, Loader, Server, HardDrive, Plus, ChevronDown, ChevronRight, FileCheck, XCircle, RefreshCw, Trash2, ChevronUp } from 'lucide-react';
+import { CheckCircle, AlertTriangle, ArrowRight, ArrowLeft, Loader, Server, HardDrive, Plus, ChevronDown, ChevronRight, FileCheck, XCircle, RefreshCw, Trash2, ChevronUp, FileText } from 'lucide-react';
 
 const UpgradeWizard = () => {
     const location = useLocation();
@@ -11,28 +11,35 @@ const UpgradeWizard = () => {
     const [deviceDetails, setDeviceDetails] = useState([]);
     const [loading, setLoading] = useState(true);
 
-    // Step 2 State
+    // Step 2 (New): Workflow Selection
+    const [availableWorkflows, setAvailableWorkflows] = useState([]);
+    const [selectedWorkflowId, setSelectedWorkflowId] = useState('');
+
+    // Step 3 (Old Step 2) State
     const [readinessResults, setReadinessResults] = useState([]);
     const [checking, setChecking] = useState(false);
 
-    // Step 3 State
+    // Step 4 (Old Step 3) State
     const [distributing, setDistributing] = useState(false);
     const [latestJobs, setLatestJobs] = useState({}); // { deviceId: jobId }
     const [selectedForNextStep, setSelectedForNextStep] = useState([]); // IDs to proceed
 
-    // Step 4 State
+    // Step 5 (Old Step 4) State
     const [availableChecks, setAvailableChecks] = useState([]);
     const [checksConfig, setChecksConfig] = useState({}); // { checkId: { pre: true, post: true } }
 
-    // Step 5 State
+    // Step 6 (Old Step 5) State
     const [activating, setActivating] = useState(false);
-    const [availableWorkflows, setAvailableWorkflows] = useState([]);
-    const [selectedWorkflowId, setSelectedWorkflowId] = useState('');
-    // Step 5 Configuration
+    // Removed duplicate workflow state here
+    // Step 6 Configuration
     const [scheduleMode, setScheduleMode] = useState(false);
     const [scheduleTime, setScheduleTime] = useState('');
     const [sequentialIds, setSequentialIds] = useState([]);
     const [parallelIds, setParallelIds] = useState([]);
+    const [createdJobIds, setCreatedJobIds] = useState([]);
+
+    // Step 4: Image Selection
+    const [imageSelection, setImageSelection] = useState({}); // { deviceId: imageId }
 
     useEffect(() => {
         if (!selectedDevices || selectedDevices.length === 0) {
@@ -114,7 +121,10 @@ const UpgradeWizard = () => {
         if (!idsToRun) setDistributing(true); // Only set main loading state for initial run
 
         try {
-            const res = await axios.post('/api/devices/distribute_image/', { ids: targetIds });
+            const res = await axios.post('/api/devices/distribute_image/', {
+                ids: targetIds,
+                image_map: imageSelection
+            });
 
             // Update mapping of device -> latest job
             // We need to match returned job_ids to devices. 
@@ -154,21 +164,31 @@ const UpgradeWizard = () => {
                     <div className="w-8 h-px bg-gray-300"></div>
                     <div className={`flex items-center ${step >= 2 ? 'text-blue-600 font-bold' : 'text-gray-400'}`}>
                         <span className={`w-6 h-6 rounded-full flex items-center justify-center border mr-2 ${step >= 2 ? 'bg-blue-600 text-white border-blue-600' : 'border-gray-300'}`}>2</span>
-                        Readiness Checks
+                        Workflow
                     </div>
                     <div className="w-8 h-px bg-gray-300"></div>
                     <div className={`flex items-center ${step >= 3 ? 'text-blue-600 font-bold' : 'text-gray-400'}`}>
                         <span className={`w-6 h-6 rounded-full flex items-center justify-center border mr-2 ${step >= 3 ? 'bg-blue-600 text-white border-blue-600' : 'border-gray-300'}`}>3</span>
-                        Distribution
+                        Readiness
                     </div>
                     <div className="w-8 h-px bg-gray-300"></div>
                     <div className={`flex items-center ${step >= 4 ? 'text-blue-600 font-bold' : 'text-gray-400'}`}>
                         <span className={`w-6 h-6 rounded-full flex items-center justify-center border mr-2 ${step >= 4 ? 'bg-blue-600 text-white border-blue-600' : 'border-gray-300'}`}>4</span>
-                        Activation Checks
+                        Image
                     </div>
                     <div className="w-8 h-px bg-gray-300"></div>
                     <div className={`flex items-center ${step >= 5 ? 'text-blue-600 font-bold' : 'text-gray-400'}`}>
                         <span className={`w-6 h-6 rounded-full flex items-center justify-center border mr-2 ${step >= 5 ? 'bg-blue-600 text-white border-blue-600' : 'border-gray-300'}`}>5</span>
+                        Distribution
+                    </div>
+                    <div className="w-8 h-px bg-gray-300"></div>
+                    <div className={`flex items-center ${step >= 6 ? 'text-blue-600 font-bold' : 'text-gray-400'}`}>
+                        <span className={`w-6 h-6 rounded-full flex items-center justify-center border mr-2 ${step >= 6 ? 'bg-blue-600 text-white border-blue-600' : 'border-gray-300'}`}>6</span>
+                        Checks
+                    </div>
+                    <div className="w-8 h-px bg-gray-300"></div>
+                    <div className={`flex items-center ${step >= 7 ? 'text-blue-600 font-bold' : 'text-gray-400'}`}>
+                        <span className={`w-6 h-6 rounded-full flex items-center justify-center border mr-2 ${step >= 7 ? 'bg-blue-600 text-white border-blue-600' : 'border-gray-300'}`}>7</span>
                         Execution
                     </div>
                 </div>
@@ -214,7 +234,56 @@ const UpgradeWizard = () => {
                     <div className="p-4 border-t border-gray-200 flex justify-end space-x-3">
                         <button onClick={() => navigate('/devices')} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded">Cancel</button>
                         <button
-                            onClick={() => { setStep(2); runChecks(); }}
+                            onClick={() => {
+                                setStep(2);
+                            }}
+                            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 flex items-center"
+                        >
+                            Next: Workflow <ArrowRight size={16} className="ml-2" />
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            {/* Step 2 (New): Workflow Selection */}
+            {step === 2 && (
+                <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+                    <div className="p-4 border-b border-gray-200 bg-gray-50">
+                        <h2 className="font-semibold text-gray-700">Select Workflow Strategy</h2>
+                        <p className="text-xs text-gray-500 mt-1">Choose the workflow that defines the upgrade logic (steps, order, error handling).</p>
+                    </div>
+                    <div className="p-6">
+                        <div className="max-w-xl mx-auto space-y-4">
+                            {availableWorkflows.map(wf => (
+                                <div
+                                    key={wf.id}
+                                    onClick={() => setSelectedWorkflowId(wf.id)}
+                                    className={`p-4 border rounded-lg cursor-pointer transition-all ${selectedWorkflowId === wf.id ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-200' : 'border-gray-200 hover:border-blue-300'}`}
+                                >
+                                    <div className="flex justify-between items-center">
+                                        <div className="font-bold text-gray-800">{wf.name}</div>
+                                        {wf.is_default && <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">Default</span>}
+                                    </div>
+                                    <div className="text-xs text-gray-500 mt-1">
+                                        Steps: {wf.steps?.map(s => s.name).join(' → ') || 'No steps defined'}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                    <div className="p-4 border-t border-gray-200 flex justify-between items-center">
+                        <button onClick={() => setStep(1)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded flex items-center">
+                            <ArrowLeft size={16} className="mr-2" /> Back
+                        </button>
+                        <button
+                            onClick={() => {
+                                if (!selectedWorkflowId) {
+                                    alert("Please select a workflow.");
+                                    return;
+                                }
+                                setStep(3);
+                                runChecks();
+                            }}
                             className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 flex items-center"
                         >
                             Next: Readiness Checks <ArrowRight size={16} className="ml-2" />
@@ -223,8 +292,8 @@ const UpgradeWizard = () => {
                 </div>
             )}
 
-            {/* Step 2: Readiness Checks */}
-            {step === 2 && (
+            {/* Step 3 (Old Step 2): Readiness Checks */}
+            {step === 3 && (
                 <div className="bg-white rounded-lg shadow-sm border border-gray-200">
                     <div className="p-4 border-b border-gray-200 bg-gray-50">
                         <h2 className="font-semibold text-gray-700">Pre-Upgrade Checks</h2>
@@ -266,11 +335,11 @@ const UpgradeWizard = () => {
                     )}
 
                     <div className="p-4 border-t border-gray-200 flex justify-between items-center">
-                        <button onClick={() => setStep(1)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded flex items-center">
+                        <button onClick={() => setStep(2)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded flex items-center">
                             <ArrowLeft size={16} className="mr-2" /> Back
                         </button>
                         <button
-                            onClick={() => setStep(3)}
+                            onClick={() => setStep(4)}
                             disabled={checking || !allReady}
                             className={`px-4 py-2 text-white rounded flex items-center ${allReady ? 'bg-blue-600 hover:bg-blue-700' : 'bg-gray-300 cursor-not-allowed'}`}
                         >
@@ -280,8 +349,79 @@ const UpgradeWizard = () => {
                 </div>
             )}
 
-            {/* Step 3: Distribution */}
-            {step === 3 && (
+            {/* Step 4: Image Selection */}
+            {step === 4 && (
+                <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+                    <div className="p-4 border-b border-gray-200 bg-gray-50">
+                        <h2 className="font-semibold text-gray-700">Image Selection</h2>
+                        <p className="text-xs text-gray-500 mt-1">Select specific software images for devices if different from default.</p>
+                    </div>
+                    <div className="p-6">
+                        <div className="border rounded-lg overflow-hidden">
+                            <table className="w-full text-left text-sm">
+                                <thead className="bg-gray-50 border-b text-xs font-bold text-gray-500 uppercase">
+                                    <tr>
+                                        <th className="p-3">Device (Platform)</th>
+                                        <th className="p-3">Current Version</th>
+                                        <th className="p-3">Target Image</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y">
+                                    {deviceDetails.map(d => {
+                                        const available = d.golden_image?.available_images || [];
+                                        const defaultImg = available.find(i => i.tag === 'Default') || { id: 'legacy', file: d.golden_image?.file || 'None', version: d.golden_image?.version };
+
+                                        // Initialize selection if not set (UX improvement: auto-select default)
+                                        // But we rely on backend auto-assign if checks fail.
+                                        // Here we just override.
+
+                                        return (
+                                            <tr key={d.id} className="hover:bg-gray-50">
+                                                <td className="p-3 font-medium text-gray-800">{d.hostname} <span className="text-gray-400 font-normal">({d.platform})</span></td>
+                                                <td className="p-3 text-gray-600 font-mono">{d.version}</td>
+                                                <td className="p-3">
+                                                    {available.length > 0 ? (
+                                                        <select
+                                                            className="border border-gray-300 rounded p-2 w-full max-w-sm bg-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                                            value={imageSelection[d.id] || (defaultImg.id !== 'legacy' ? defaultImg.id : '')}
+                                                            onChange={(e) => setImageSelection(prev => ({ ...prev, [d.id]: e.target.value }))}
+                                                        >
+                                                            {available.map(img => (
+                                                                <option key={img.id} value={img.id}>
+                                                                    {img.file} (v{img.version}) {img.tag === 'Default' ? '(Default)' : ''}
+                                                                </option>
+                                                            ))}
+                                                        </select>
+                                                    ) : (
+                                                        <div className="text-gray-500 italic flex items-center">
+                                                            <span className="bg-gray-100 text-gray-600 px-2 py-1 rounded text-xs mr-2">Legacy</span>
+                                                            {defaultImg.file}
+                                                        </div>
+                                                    )}
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div className="p-4 border-t border-gray-200 flex justify-between items-center">
+                        <button onClick={() => setStep(3)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded flex items-center">
+                            <ArrowLeft size={16} className="mr-2" /> Back
+                        </button>
+                        <button
+                            onClick={() => setStep(5)}
+                            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 flex items-center shadow-sm"
+                        >
+                            Next: Distribution <ArrowRight size={16} className="ml-2" />
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            {/* Step 5 (Old Step 3): Distribution */}
+            {step === 5 && (
                 <div className="bg-white rounded-lg shadow-sm border border-gray-200">
                     <div className="p-4 border-b border-gray-200 bg-gray-50 flex justify-between items-center">
                         <h2 className="font-semibold text-gray-700">Software Distribution</h2>
@@ -323,7 +463,7 @@ const UpgradeWizard = () => {
                                             }
                                             // Update global selected for next steps
                                             setSelectedDevices(selectedForNextStep);
-                                            setStep(4);
+                                            setStep(6);
                                         }}
                                         className="w-full max-w-xs px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded shadow-lg font-bold flex items-center justify-center"
                                     >
@@ -334,6 +474,14 @@ const UpgradeWizard = () => {
                                     </p>
                                 </div>
                             )}
+
+                            <button
+                                onClick={() => setStep(4)}
+                                disabled={distributing}
+                                className={`mt-4 px-4 py-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded flex items-center text-sm ${distributing ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            >
+                                <ArrowLeft size={14} className="mr-2" /> Back to Image
+                            </button>
                         </div>
 
                         {/* RIGHT: Detailed Job List */}
@@ -370,8 +518,8 @@ const UpgradeWizard = () => {
                 </div>
             )}
 
-            {/* Step 4: Activation Checks */}
-            {step === 4 && (
+            {/* Step 6 (Old Step 4): Activation Checks */}
+            {step === 6 && (
                 <div className="bg-white rounded-lg shadow-sm border border-gray-200">
                     <div className="p-4 border-b border-gray-200 bg-gray-50 flex justify-between items-center">
                         <div>
@@ -479,7 +627,7 @@ const UpgradeWizard = () => {
                     </div>
 
                     <div className="p-4 border-t border-gray-200 flex justify-between items-center">
-                        <button onClick={() => setStep(3)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded flex items-center">
+                        <button onClick={() => setStep(5)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded flex items-center">
                             <ArrowLeft size={16} className="mr-2" /> Back
                         </button>
                         <button
@@ -487,7 +635,7 @@ const UpgradeWizard = () => {
                                 // Initialize lists: All parallel by default
                                 setParallelIds(selectedDevices);
                                 setSequentialIds([]);
-                                setStep(5);
+                                setStep(7);
                             }}
                             className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 flex items-center"
                         >
@@ -497,8 +645,8 @@ const UpgradeWizard = () => {
                 </div>
             )}
 
-            {/* Step 5: Final Execution */}
-            {step === 5 && (
+            {/* Step 7 (Old Step 5): Final Execution */}
+            {step === 7 && (
                 <div className="bg-white rounded-lg shadow-sm border border-gray-200">
                     <div className="p-4 border-b border-gray-200 bg-gray-50">
                         <h2 className="font-semibold text-gray-700">Ready to Activate</h2>
@@ -557,23 +705,8 @@ const UpgradeWizard = () => {
 
 
 
-                        {/* Workflow Selection */}
-                        <div className="bg-white border rounded p-4 text-left">
-                            <h3 className="font-bold text-gray-700 mb-2 text-sm uppercase">Workflow Strategy</h3>
-                            <select
-                                value={selectedWorkflowId}
-                                onChange={(e) => setSelectedWorkflowId(e.target.value)}
-                                className="w-full border rounded p-2 text-sm bg-white"
-                            >
-                                <option value="">-- Use System Default --</option>
-                                {availableWorkflows.map(wf => (
-                                    <option key={wf.id} value={wf.id}>
-                                        {wf.name} {wf.is_default ? '(Default)' : ''}
-                                    </option>
-                                ))}
-                            </select>
-                            <p className="text-xs text-gray-500 mt-1">Select the sequence of operations (Readiness, Distribution, Wait, etc.)</p>
-                        </div>
+                        {/* Workflow Selection Removed - Moved to Step 2 */}
+                        {/* Summary Block Updated above to show selected Workflow */}
 
                         {/* Middle: Execution Order */}
                         <div className="border border-gray-200 rounded-lg overflow-hidden">
@@ -735,8 +868,9 @@ const UpgradeWizard = () => {
                                             alert("Please select a date and time for relevant schedule.");
                                             return;
                                         }
+                                        // Workflow ID already verified in Step 2, but check again
                                         if (!selectedWorkflowId) {
-                                            alert("Please select a Workflow Strategy to proceed.");
+                                            alert("No workflow selected. Please go back to Step 2.");
                                             return;
                                         }
 
@@ -748,7 +882,7 @@ const UpgradeWizard = () => {
                                                 post: checksConfig[id].post
                                             })).filter(c => c.pre || c.post);
 
-                                            await axios.post('/api/devices/activate_image/', {
+                                            const res = await axios.post('/api/devices/activate_image/', {
                                                 ids: selectedDevices,
                                                 checks: checksPayload,
                                                 schedule_time: scheduleMode ? scheduleTime : null,
@@ -756,11 +890,14 @@ const UpgradeWizard = () => {
                                                     sequential: sequentialIds,
                                                     parallel: parallelIds
                                                 },
-                                                workflow_id: selectedWorkflowId
+                                                workflow_id: selectedWorkflowId,
+                                                image_map: imageSelection
                                             });
 
-                                            // Auto advance to "Done" screen
-                                            setTimeout(() => setStep(6), 1500);
+                                            setCreatedJobIds(res.data.job_ids || []);
+
+                                            // Auto advance to "Completion" screen (Step 8)
+                                            setTimeout(() => setStep(8), 1500);
                                         } catch (e) {
                                             console.error(e);
                                             alert("Activation failed to start.");
@@ -780,32 +917,35 @@ const UpgradeWizard = () => {
                         </div>
                     </div>
                     <div className="p-4 border-t border-gray-200 flex justify-start">
-                        <button onClick={() => setStep(4)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded flex items-center">
+                        <button onClick={() => setStep(6)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded flex items-center">
                             <ArrowLeft size={16} className="mr-2" /> Back
                         </button>
                     </div>
                 </div>
-            )
-            }
+            )}
 
-            {/* Step 6: Completion */}
+            {/* Step 8: Completion */}
             {
-                step === 6 && (
-                    <div className="bg-white rounded-lg shadow-sm border border-gray-200 text-center p-12">
-                        <div className="w-20 h-20 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                            <CheckCircle size={40} />
+                step === 8 && (
+                    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8">
+                        <div className="text-center mb-8">
+                            <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                                <CheckCircle size={32} />
+                            </div>
+                            <h2 className="text-2xl font-bold text-gray-800">Activation Initiated</h2>
+                            <p className="text-gray-600">
+                                The following execution jobs have been created and queued.
+                            </p>
                         </div>
-                        <h2 className="text-2xl font-bold text-gray-800 mb-2">Activation Job Started</h2>
-                        <p className="text-gray-600 mb-6">
-                            The activation process including configured checks has been queued. <br />
-                            You can monitor the progress in the Job History page.
-                        </p>
-                        <div className="flex justify-center space-x-4">
-                            <button onClick={() => navigate('/devices')} className="px-4 py-2 border border-blue-600 text-blue-600 rounded hover:bg-blue-50">
-                                Back to Inventory
+
+                        <JobSummaryTable jobIds={createdJobIds} />
+
+                        <div className="flex justify-center space-x-4 mt-8">
+                            <button onClick={() => navigate('/devices')} className="px-6 py-2 border border-gray-300 text-gray-700 rounded hover:bg-gray-50 flex items-center">
+                                <ArrowLeft size={16} className="mr-2" /> Back to Inventory
                             </button>
-                            <button className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
-                                View Job Details
+                            <button onClick={() => navigate('/jobs')} className="px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 flex items-center">
+                                <FileText size={16} className="mr-2" /> View All History
                             </button>
                         </div>
                     </div>
@@ -999,6 +1139,81 @@ const JobRow = ({ device, job, isSelected, onToggle, onRetry, onRemove }) => {
                     </div>
                 </div>
             )}
+        </div>
+    );
+};
+
+const JobSummaryTable = ({ jobIds }) => {
+    const [jobs, setJobs] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const navigate = useNavigate();
+
+    useEffect(() => {
+        const fetchJobs = async () => {
+            if (!jobIds || jobIds.length === 0) return;
+            try {
+                // Fetch all and filter (mock API limitation) or fetch individually
+                // Ideally API supports bulk get. 
+                // We'll simplisticly fetch list and filter client side for now as per other patterns.
+                const res = await axios.get('/api/jobs/');
+                const all = res.data.results || res.data;
+                const relevant = all.filter(j => jobIds.includes(j.id));
+                setJobs(relevant);
+            } catch (e) {
+                console.error("Failed to fetch job summaries", e);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchJobs();
+    }, [jobIds]);
+
+    if (loading) return <div className="text-center p-4 text-gray-500">Loading details...</div>;
+    if (jobs.length === 0) return <div className="text-center p-4 text-gray-400">No jobs found.</div>;
+
+    return (
+        <div className="overflow-hidden border border-gray-200 rounded-lg">
+            <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                    <tr>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Job ID</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Device</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Scheduled / Created</th>
+                    </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                    {jobs.map(job => (
+                        <tr
+                            key={job.id}
+                            onClick={() => navigate(`/jobs/${job.id}`)}
+                            className="hover:bg-blue-50 cursor-pointer transition-colors"
+                        >
+                            <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-blue-600">
+                                #{job.id}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                {job.device_name || job.device || 'Unknown'}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                {job.workflow_name || 'Workflow'}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                                <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
+                                    ${job.status === 'scheduled' ? 'bg-purple-100 text-purple-800' :
+                                        job.status === 'running' ? 'bg-blue-100 text-blue-800' :
+                                            'bg-green-100 text-green-800'}`}>
+                                    {job.status}
+                                </span>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                {new Date(job.created_at || Date.now()).toLocaleString()}
+                            </td>
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
         </div>
     );
 };

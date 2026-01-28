@@ -1,6 +1,7 @@
 import logging
 import re
 from swim_backend.core.services.genie_service import create_genie_device
+from swim_backend.core.services.diff_service import log_update
 
 logger = logging.getLogger(__name__)
 
@@ -12,16 +13,20 @@ def check_readiness(device, job):
     3. Connection Health
     """
     logger.info(f"Running readiness checks for {device.hostname}")
+    log_update(job.id, f"Initiating readiness checks for {device.hostname}...")
     
     checks = {}
     
     # 1. Connect to Device
     dev = None
     try:
+        log_update(job.id, f"Connecting to {device.ip_address} via SSH...")
         dev, _ = create_genie_device(device, job.id)
         dev.connect(log_stdout=False)
+        log_update(job.id, "Connection established successfully.")
     except Exception as e:
         logger.error(f"Readiness: Failed to connect to {device.hostname}: {e}")
+        log_update(job.id, f"Connection Failed: {e}")
         checks["connection"] = {
             "status": "failed",
             "message": f"Could not connect via SSH: {e}"
@@ -31,6 +36,7 @@ def check_readiness(device, job):
     try:
         # 2. Flash Memory Check
         # Requirement: Image Size * 2.5 (Safety margin for expand/install)
+        log_update(job.id, "Checking Flash Memory space...")
         image_size = job.image.size_bytes if job.image else 0
         required_space = image_size * 2.5
         
@@ -51,78 +57,82 @@ def check_readiness(device, job):
                      "status": "success",
                      "message": f"Free: {free_mb:.2f}MB (Required: {req_mb:.2f}MB)"
                  }
+                 log_update(job.id, f"Flash Check Passed: {free_mb:.2f}MB free.")
             else:
                  checks["flash_memory"] = {
                      "status": "failed",
                      "message": f"Insufficient Flash. Free: {free_mb:.2f}MB, Required: {req_mb:.2f}MB. Manual Intervention Required."
                  }
+                 log_update(job.id, f"Flash Check Failed: Only {free_mb:.2f}MB free.")
         else:
              checks["flash_memory"] = {
                  "status": "warning",
                  "message": "Could not parse free space from 'dir flash:'"
              }
+             log_update(job.id, "Flash Check Warning: Could not parse output.")
 
         # 3. Config Register Check
         # Should be 0x2102 for standard boot
-        try:
-            # Try parsing first
-            ver_output = dev.parse("show version")
-            # Structure depends on platform, for IOSXE:
-            # ver_output['version']['curr_config_register']
-            curr_reg = ver_output.get('version', {}).get('curr_config_register', 'Unknown')
-        except:
-             # Fallback to regex
-             ver_raw = dev.execute("show version")
-             match_reg = re.search(r'[Cc]onfiguration [Rr]egister is (0x\w+)', ver_raw)
-             curr_reg = match_reg.group(1) if match_reg else "Unknown"
+        # log_update(job.id, "Checking Configuration Register...")
+        # try:
+        #     # Try parsing first
+        #     ver_output = dev.parse("show version")
+        #     # Structure depends on platform, for IOSXE:
+        #     # ver_output['version']['curr_config_register']
+        #     curr_reg = ver_output.get('version', {}).get('curr_config_register', 'Unknown')
+        # except:
+        #      # Fallback to regex
+        #      ver_raw = dev.execute("show version")
+        #      match_reg = re.search(r'[Cc]onfiguration [Rr]egister is (0x\w+)', ver_raw)
+        #      curr_reg = match_reg.group(1) if match_reg else "Unknown"
         
-        if curr_reg == "0x2102":
-             checks["config_register"] = {
-                 "status": "success",
-                 "message": f"Valid: {curr_reg}"
-             }
-        else:
-             # User Request: Only show warning for registry check
-             checks["config_register"] = {
-                 "status": "warning",
-                 "message": f"Invalid Register: {curr_reg} (Expected 0x2102)"
-             }
+        # if curr_reg == "0x2102":
+        #      checks["config_register"] = {
+        #          "status": "success",
+        #          "message": f"Valid: {curr_reg}"
+        #      }
+        # else:
+        #      # User Request: Only show warning for registry check
+        #      checks["config_register"] = {
+        #          "status": "warning",
+        #          "message": f"Invalid Register: {curr_reg} (Expected 0x2102)"
+        #      }
 
-        # 4. Startup Config Check (Simple Existence)
+        # 4. Startup ignore Check
+        log_update(job.id, "Checking Startup Configuration...")
         try:
-            cmd_startup = "show startup-config | include ^!"
+            cmd_startup = "show romvar"
             out_startup = dev.execute(cmd_startup)
-            if "!" in out_startup or "version" in out_startup:
+            if "SWITCH_IGNORE_STARTUP_CFG=1" not in out_startup:
                  checks["startup_config"] = {
                      "status": "success", 
-                     "message": "Startup config present."
+                     "message": "Startup config not ignored"
                  }
             else:
                  # User Request: Only show warning
                  checks["startup_config"] = {
                      "status": "warning",
-                     "message": "Startup config might be missing or empty."
+                     "message": "Startup config ignored"
                  }
         except:
              checks["startup_config"] = {"status": "warning", "message": "Could not verify startup config."}
 
     except Exception as e:
         logger.error(f"Error during readiness checks: {e}")
+        log_update(job.id, f"Readiness Check Error: {e}")
         checks["execution_error"] = {"status": "failed", "message": str(e)}
         
     finally:
         try:
             dev.disconnect()
+            log_update(job.id, "Disconnected from device.")
         except:
             pass
 
-    # Simulate Custom Checks from DB
-    if job and job.selected_checks.exists():
-        for custom_check in job.selected_checks.all():
-            checks[custom_check.name] = {
-                "status": "success",
-                "message": f"Custom Check '{custom_check.name}' (Placeholder Passed)."
-            }
+    # Custom Checks - For now, these are placeholder logic in previous version.
+    # User requested removal of mock data.
+    # Real custom checks logic should be implemented here or this block removed.
+    pass
 
     # Calculate overall readiness
     # User Request: If free space is less -> Manual Intervention Required (Fail)

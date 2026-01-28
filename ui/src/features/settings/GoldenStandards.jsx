@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Save, AlertCircle, CheckCircle, ArrowLeft, RefreshCw, Folder, Trash2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import ConfirmModal from '../inventory/ConfirmModal';
 
 const GoldenStandards = () => {
     const [models, setModels] = useState([]);
@@ -11,6 +12,7 @@ const GoldenStandards = () => {
     const [saving, setSaving] = useState(null); // id of model being saved
     const [scanning, setScanning] = useState(null); // id of model being scanned
     const [cleaning, setCleaning] = useState(false);
+    const [confirmModalData, setConfirmModalData] = useState(null);
 
     useEffect(() => {
         fetchData();
@@ -32,23 +34,31 @@ const GoldenStandards = () => {
     };
 
     const handleCleanup = async () => {
-        if (!confirm("Are you sure you want to delete all device models that are not assigned to any device?")) return;
-
-        setCleaning(true);
-        try {
-            const res = await axios.delete('/api/device-models/cleanup_unused/');
-            if (res.data.status === 'success') {
-                alert(res.data.message);
-                fetchData(); // Refresh list
-            } else {
-                alert(res.data.message);
-            }
-        } catch (error) {
-            console.error(error);
-            alert("Cleanup failed.");
-        } finally {
-            setCleaning(false);
-        }
+        setConfirmModalData({
+            title: "Cleanup Unused Models",
+            message: "Are you sure you want to delete all device models that are not assigned to any device?",
+            confirmText: "Delete",
+            isDestructive: true,
+            onConfirm: async () => {
+                setConfirmModalData(null);
+                setCleaning(true);
+                try {
+                    const res = await axios.delete('/api/device-models/cleanup_unused/');
+                    if (res.data.status === 'success') {
+                        // alert(res.data.message); // Optional: Use toast or let UI refresh show it
+                        fetchData(); // Refresh list
+                    } else {
+                        alert(res.data.message);
+                    }
+                } catch (error) {
+                    console.error(error);
+                    alert("Cleanup failed.");
+                } finally {
+                    setCleaning(false);
+                }
+            },
+            onCancel: () => setConfirmModalData(null)
+        });
     };
 
     const handleScan = async (model) => {
@@ -58,7 +68,7 @@ const GoldenStandards = () => {
         }
         setScanning(model.id);
         try {
-            const res = await axios.get(`/api/device-models/${model.id}/scan_images/`, {
+            const res = await axios.get(`/api/device-models/${model.name}/scan_images/`, {
                 params: {
                     path: model.golden_image_path,
                     server: model.default_file_server
@@ -74,9 +84,22 @@ const GoldenStandards = () => {
     };
 
     const handleUpdate = async (model) => {
+        // Validation
+        if (!model.golden_image_size || !model.golden_image_md5) {
+            setConfirmModalData({
+                title: "Validation Error",
+                message: "Size (Bytes) and MD5 Hash are mandatory fields. Please enter them before saving.",
+                confirmText: "OK",
+                showCancel: false,
+                onConfirm: () => setConfirmModalData(null),
+                onCancel: () => setConfirmModalData(null)
+            });
+            return;
+        }
+
         setSaving(model.id);
         try {
-            await axios.patch(`/api/device-models/${model.id}/`, {
+            await axios.patch(`/api/device-models/${model.name}/`, {
                 golden_image_version: model.golden_image_version,
                 golden_image_file: model.golden_image_file,
                 golden_image_path: model.golden_image_path,
@@ -84,10 +107,25 @@ const GoldenStandards = () => {
                 golden_image_size: model.golden_image_size,
                 golden_image_md5: model.golden_image_md5
             });
-            alert("Saved successfully.");
+
+            setConfirmModalData({
+                title: "Success",
+                message: "Standard saved successfully.",
+                confirmText: "OK",
+                showCancel: false,
+                onConfirm: () => setConfirmModalData(null),
+                onCancel: () => setConfirmModalData(null)
+            });
         } catch (error) {
-            alert("Failed to save standard.");
             console.error(error);
+            setConfirmModalData({
+                title: "Error",
+                message: "Failed to save standard: " + (error.response?.data?.error || error.message),
+                confirmText: "OK",
+                showCancel: false,
+                onConfirm: () => setConfirmModalData(null),
+                onCancel: () => setConfirmModalData(null)
+            });
         } finally {
             setSaving(null);
         }
@@ -262,6 +300,18 @@ const GoldenStandards = () => {
                     </tbody>
                 </table>
             </div>
+            {
+                confirmModalData && (
+                    <ConfirmModal
+                        title={confirmModalData.title}
+                        message={confirmModalData.message}
+                        confirmText={confirmModalData.confirmText}
+                        isDestructive={confirmModalData.isDestructive}
+                        onConfirm={confirmModalData.onConfirm}
+                        onCancel={() => setConfirmModalData(null)}
+                    />
+                )
+            }
         </div>
     );
 };

@@ -5,7 +5,7 @@ class ImageSerializer(serializers.ModelSerializer):
     class Meta:
         model = Image
         fields = '__all__'
-        read_only_fields = ('size_bytes', 'md5_checksum', 'uploaded_at', 'filename')
+        read_only_fields = ('uploaded_at',)
 
 class ImageViewSet(viewsets.ModelViewSet):
     queryset = Image.objects.all()

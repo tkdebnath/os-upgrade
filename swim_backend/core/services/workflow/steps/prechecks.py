@@ -1,4 +1,4 @@
-from ..base import BaseStep
+from swim_backend.core.services.workflow.base import BaseStep
 from swim_backend.core.services.genie_service import create_genie_device, run_check_operation
 from swim_backend.core.models import CheckRun
 
@@ -65,7 +65,12 @@ class PreCheckStep(BaseStep):
                 return 'failed', str(e)
             finally:
                 # Always disconnect
-                try:
-                    genie_dev.disconnect()
-                except:
-                    pass
+                if 'genie_dev' in locals() and genie_dev:
+                    try:
+                        genie_dev.disconnect()
+                    except:
+                        pass
+
+        except Exception as e:
+             self.log(f"Pre-Check Setup Error: {e}")
+             return 'failed', str(e)

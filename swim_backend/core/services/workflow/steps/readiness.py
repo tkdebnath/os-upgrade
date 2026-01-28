@@ -1,4 +1,4 @@
-from ..base import BaseStep
+from swim_backend.core.services.workflow.base import BaseStep
 from swim_backend.core.readiness import check_readiness
 
 class ReadinessStep(BaseStep):

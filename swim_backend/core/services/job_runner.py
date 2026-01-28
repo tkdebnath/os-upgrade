@@ -46,6 +46,10 @@ def run_swim_job(job_id):
     except Exception as e:
         logger.error(f"Job {job_id} failed: {e}")
         try:
+             # Ensure failure is visible in UI
+             from .diff_service import log_update
+             log_update(job_id, f"Critical System Error: {e}")
+             
              job = Job.objects.get(id=job_id)
              job.status = 'failed'
              job.save()

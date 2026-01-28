@@ -1,7 +1,7 @@
 import time
 import subprocess
 import platform
-from .base import BaseStep
+from swim_backend.core.services.workflow.base import BaseStep
 from swim_backend.core.services.diff_service import log_update
 from swim_backend.core.models import Job
 

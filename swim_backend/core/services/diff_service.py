@@ -19,8 +19,9 @@ def log_update(job_id, message):
         timestamp = timezone.now().strftime("%Y-%m-%d %H:%M:%S")
         entry = f"[{timestamp}] {message}\n"
         job.log += entry
-        job.save()
-    except Job.DoesNotExist:
+        job.save(update_fields=['log'])
+    except (Job.DoesNotExist, ValueError):
+        # ValueError happens if job_id is a string (e.g. from readiness check view)
         pass
 
 import subprocess

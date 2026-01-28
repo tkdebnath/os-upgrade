@@ -15,9 +15,11 @@ const NetBoxWizard = ({ onClose, onImportComplete, onBack }) => {
     const [selectedDevices, setSelectedDevices] = useState([]);
     const [loading, setLoading] = useState(false);
     const [creds, setCreds] = useState({ username: '', password: '' });
+    const [error, setError] = useState(null); // Add error state
 
     const handleConnect = async () => {
         setLoading(true);
+        setError(null);
         try {
             const res = await axios.post('/api/devices/plugin/netbox/action/', { action: 'connect', config });
             // Fetch metadata immediately after connect for this wizard flow
@@ -25,7 +27,8 @@ const NetBoxWizard = ({ onClose, onImportComplete, onBack }) => {
             setMeta(metaRes.data);
             setStep(2);
         } catch (error) {
-            alert('Connection Failed: ' + (error.response?.data?.error || error.message));
+            console.error(error);
+            setError('Connection Failed: ' + (error.response?.data?.error || error.message));
         } finally {
             setLoading(false);
         }
@@ -33,6 +36,7 @@ const NetBoxWizard = ({ onClose, onImportComplete, onBack }) => {
 
     const handlePreview = async () => {
         setLoading(true);
+        setError(null);
         try {
             const res = await axios.post('/api/devices/plugin/netbox/action/', {
                 action: 'preview',
@@ -42,7 +46,8 @@ const NetBoxWizard = ({ onClose, onImportComplete, onBack }) => {
             setPreviewDevices(res.data.devices);
             setStep(3);
         } catch (error) {
-            alert('Preview Failed');
+            console.error(error);
+            setError('Preview Failed: ' + (error.response?.data?.error || error.message));
         } finally {
             setLoading(false);
         }
@@ -51,6 +56,7 @@ const NetBoxWizard = ({ onClose, onImportComplete, onBack }) => {
     const handleImport = async () => {
         const toImport = previewDevices.filter(d => selectedDevices.includes(d.name));
         setLoading(true);
+        setError(null);
         try {
             const res = await axios.post('/api/devices/plugin/netbox/action/', {
                 action: 'import',
@@ -60,6 +66,10 @@ const NetBoxWizard = ({ onClose, onImportComplete, onBack }) => {
 
             const { count, errors } = res.data;
             if (errors && errors.length > 0) {
+                // Keep the alert for the final report as it might be long, or move to a results step?
+                // User asked for error display "during any step". 
+                // A partial success/failure report is better as an alert or a distinct UI state.
+                // For now, let's keep the alert for the "Import Report" but ensure "Import Failed" (network/server error) is inline.
                 alert(`Imported ${count} devices.\n\n${errors.length} errors occurred:\n${errors.slice(0, 10).join('\n')}${errors.length > 10 ? '\n...' : ''}`);
             } else {
                 alert(`Successfully imported ${count} devices.`);
@@ -68,7 +78,8 @@ const NetBoxWizard = ({ onClose, onImportComplete, onBack }) => {
             onImportComplete();
             onClose();
         } catch (error) {
-            alert('Import Failed: ' + (error.response?.data?.error || error.message));
+            console.error(error);
+            setError('Import Failed: ' + (error.response?.data?.error || error.message));
         } finally {
             setLoading(false);
         }
@@ -94,6 +105,12 @@ const NetBoxWizard = ({ onClose, onImportComplete, onBack }) => {
                 </div>
 
                 <div className="flex-1 p-8 overflow-y-auto">
+                    {error && (
+                        <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded text-sm flex items-start">
+                            <span className="mr-2 font-bold">Error:</span>
+                            <span>{error}</span>
+                        </div>
+                    )}
                     {step === 1 && (
                         <div className="max-w-md mx-auto space-y-4">
                             <div>
@@ -230,14 +247,36 @@ const NetBoxWizard = ({ onClose, onImportComplete, onBack }) => {
                     )}
                 </div>
 
-                <div className="p-6 border-t border-gray-100 flex justify-between">
-                    <button onClick={onClose} className="text-gray-500 hover:text-gray-700">Cancel</button>
-                    <div>
-                        {step === 1 && onBack && <button onClick={onBack} className="px-4 py-2 border rounded mr-2">Back</button>}
-                        {step > 1 && <button onClick={() => setStep(step - 1)} className="px-4 py-2 border rounded mr-2">Back</button>}
-                        {step === 1 && <button onClick={handleConnect} disabled={loading} className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">{loading ? 'Connecting...' : 'Next'}</button>}
-                        {step === 2 && <button onClick={handlePreview} disabled={loading} className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">{loading ? 'Fetching...' : 'Next'}</button>}
-                        {step === 3 && <button onClick={handleImport} disabled={loading || selectedDevices.length === 0} className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700">{loading ? 'Importing...' : 'Import Devices'}</button>}
+                <div className="p-6 border-t border-gray-100 flex justify-between items-center">
+                    <div className="flex items-center">
+                        <button onClick={onClose} className="text-gray-500 hover:text-gray-700">Cancel</button>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                        {step === 3 && selectedDevices.length === 0 && (
+                            <span className="text-red-500 text-sm animate-pulse mr-2">
+                                Please select at least one device
+                            </span>
+                        )}
+
+                        {step === 1 && onBack && <button onClick={onBack} className="px-4 py-2 border rounded hover:bg-gray-50">Back</button>}
+                        {step > 1 && <button onClick={() => setStep(step - 1)} className="px-4 py-2 border rounded hover:bg-gray-50">Back</button>}
+
+                        {step === 1 && <button onClick={handleConnect} disabled={loading} className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50">{loading ? 'Connecting...' : 'Next'}</button>}
+                        {step === 2 && <button onClick={handlePreview} disabled={loading} className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50">{loading ? 'Fetching...' : 'Next'}</button>}
+
+                        {step === 3 && (
+                            <button
+                                onClick={handleImport}
+                                disabled={loading || selectedDevices.length === 0}
+                                className={`px-4 py-2 rounded text-white transition-colors ${selectedDevices.length === 0
+                                    ? 'bg-gray-400 cursor-not-allowed'
+                                    : 'bg-green-600 hover:bg-green-700'
+                                    }`}
+                            >
+                                {loading ? 'Importing...' : 'Import Devices'}
+                            </button>
+                        )}
                     </div>
                 </div>
             </div>

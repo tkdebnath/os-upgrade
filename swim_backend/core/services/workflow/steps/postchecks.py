@@ -1,4 +1,4 @@
-from ..base import BaseStep
+from swim_backend.core.services.workflow.base import BaseStep
 from swim_backend.core.services.genie_service import create_genie_device, run_check_operation
 from swim_backend.core.services.diff_service import generate_diffs
 from swim_backend.core.models import CheckRun

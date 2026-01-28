@@ -1,15 +1,15 @@
 import time
-from .base import BaseStep, StepResult
+from swim_backend.core.services.workflow.base import BaseStep
 
 class WaitStep(BaseStep):
     """
     Pauses the workflow for a specified duration.
-    Parameters:
+    Config:
     - duration: int (seconds)
     """
     
-    def execute(self, context) -> StepResult:
-        duration = int(context.get('duration', 30))
+    def execute(self):
+        duration = int(self.config.get('duration', 30))
         self.log(f"Waiting for {duration} seconds...")
         
         # In a real async engine (Celery), this should be a retry/countdown.
@@ -17,4 +17,4 @@ class WaitStep(BaseStep):
         time.sleep(duration)
         
         self.log("Wait complete.")
-        return StepResult(success=True, output=f"Waited {duration}s")
+        return 'success', f"Waited {duration}s"

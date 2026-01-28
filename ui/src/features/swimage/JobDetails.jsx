@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import axios from 'axios';
 import {
     ArrowLeft, Activity, CheckCircle, XCircle, Clock,
@@ -158,7 +158,9 @@ const JobDetails = () => {
                         <div className="space-y-3 text-sm">
                             <div className="flex justify-between">
                                 <span className="text-gray-500">Hostname</span>
-                                <span className="font-medium">{job.device_hostname}</span>
+                                <Link to={`/devices/${job.device}`} className="font-medium text-blue-600 hover:underline">
+                                    {job.device_hostname}
+                                </Link>
                             </div>
                             <div className="flex justify-between">
                                 <span className="text-gray-500">Device ID</span>
@@ -166,8 +168,42 @@ const JobDetails = () => {
                             </div>
                             <div className="flex justify-between">
                                 <span className="text-gray-500">Target Image</span>
-                                <span className="font-medium text-blue-600">{job.image_filename}</span>
+                                <span className="font-medium text-blue-600">{job.image_filename || "N/A"}</span>
                             </div>
+                            {job.file_server_name && (
+                                <div className="flex justify-between">
+                                    <span className="text-gray-500">File Server</span>
+                                    <span className="font-medium">{job.file_server_name} ({job.file_server_address})</span>
+                                </div>
+                            )}
+                            {job.file_path && (
+                                <div className="flex justify-between flex-col">
+                                    <span className="text-gray-500">File Path</span>
+                                    <span className="font-mono text-xs text-gray-700 bg-gray-50 p-1 rounded break-all">{job.file_path}</span>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Selected Checks Config */}
+                    <div className="bg-white p-5 rounded-lg border border-gray-200 shadow-sm">
+                        <h3 className="font-bold text-gray-800 mb-4 flex items-center">
+                            <CheckCircle size={18} className="mr-2 text-purple-600" /> Selected Checks
+                        </h3>
+                        <div className="space-y-3">
+                            {job.selected_checks_details && job.selected_checks_details.length > 0 ? (
+                                job.selected_checks_details.map(check => (
+                                    <div key={check.id} className="text-sm p-2 bg-purple-50 rounded border border-purple-100">
+                                        <div className="flex justify-between items-center mb-1">
+                                            <span className="font-bold text-gray-800 text-xs">{check.name}</span>
+                                            <span className="text-[10px] uppercase font-bold text-purple-700 px-1.5 py-0.5 bg-purple-100 rounded">{check.check_type || 'Custom'}</span>
+                                        </div>
+                                        <div className="font-mono text-xs text-gray-600 break-all">{check.command}</div>
+                                    </div>
+                                ))
+                            ) : (
+                                <p className="text-gray-400 text-sm italic">No checks selected.</p>
+                            )}
                         </div>
                     </div>
 
@@ -290,33 +326,35 @@ const JobDetails = () => {
                 </div>
             </div>
             {/* Log Modal */}
-            {previewCheck && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                    <div className="bg-white rounded-lg shadow-xl w-3/4 max-w-4xl h-3/4 flex flex-col p-0 overflow-hidden">
-                        <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center bg-gray-50">
-                            <div>
-                                <h3 className="text-lg font-bold text-gray-800">{previewCheck.check_name} Output</h3>
-                                <p className="text-xs text-gray-500 font-mono mt-1">ID: {previewCheck.id} • {new Date(previewCheck.created_at).toLocaleString()}</p>
+            {
+                previewCheck && (
+                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                        <div className="bg-white rounded-lg shadow-xl w-3/4 max-w-4xl h-3/4 flex flex-col p-0 overflow-hidden">
+                            <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center bg-gray-50">
+                                <div>
+                                    <h3 className="text-lg font-bold text-gray-800">{previewCheck.check_name} Output</h3>
+                                    <p className="text-xs text-gray-500 font-mono mt-1">ID: {previewCheck.id} • {new Date(previewCheck.created_at).toLocaleString()}</p>
+                                </div>
+                                <div className="flex items-center space-x-2">
+                                    <button
+                                        onClick={() => downloadCheck(previewCheck)}
+                                        className="px-3 py-1.5 border border-gray-300 rounded text-xs font-bold hover:bg-white text-gray-600 flex items-center"
+                                    >
+                                        <Download size={12} className="mr-1" /> Download
+                                    </button>
+                                    <button onClick={() => setPreviewCheck(null)} className="text-gray-400 hover:text-gray-600">
+                                        <XCircle size={24} />
+                                    </button>
+                                </div>
                             </div>
-                            <div className="flex items-center space-x-2">
-                                <button
-                                    onClick={() => downloadCheck(previewCheck)}
-                                    className="px-3 py-1.5 border border-gray-300 rounded text-xs font-bold hover:bg-white text-gray-600 flex items-center"
-                                >
-                                    <Download size={12} className="mr-1" /> Download
-                                </button>
-                                <button onClick={() => setPreviewCheck(null)} className="text-gray-400 hover:text-gray-600">
-                                    <XCircle size={24} />
-                                </button>
-                            </div>
+                            <pre className="flex-1 bg-gray-900 text-gray-300 p-6 overflow-auto font-mono text-xs whitespace-pre-wrap">
+                                {previewCheck.output || "No output captured."}
+                            </pre>
                         </div>
-                        <pre className="flex-1 bg-gray-900 text-gray-300 p-6 overflow-auto font-mono text-xs whitespace-pre-wrap">
-                            {previewCheck.output || "No output captured."}
-                        </pre>
                     </div>
-                </div>
-            )}
-        </div>
+                )
+            }
+        </div >
     );
 };
 

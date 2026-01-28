@@ -70,12 +70,14 @@ const Dashboard = () => {
                                     innerRadius={40} outerRadius={60}
                                     paddingAngle={5}
                                     dataKey="value"
+                                    nameKey="name"
                                 >
                                     {(stats.analytics?.by_site || []).map((entry, index) => (
                                         <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                                     ))}
                                 </Pie>
-                                <Tooltip formatter={(value) => [value, 'Devices']} />
+                                <Tooltip formatter={(value, name) => [value, name]} />
+                                <Legend />
                             </PieChart>
                         </ResponsiveContainer>
                     </div>

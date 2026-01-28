@@ -33,6 +33,11 @@ def sync_device_details(device_id):
            # For IOSXE
            # suppress
            output = dev.parse("show version")
+
+           # initalise variables
+           version = None
+           hardware_model = None
+           boot_method = None
            
            if isinstance(output, dict) and isinstance(output.get('version', {}), dict):
                version = output.get('version', {}).get('version', '')
@@ -41,6 +46,12 @@ def sync_device_details(device_id):
                hardware_info = output.get('platform', {}).get('hardware', [])
                hardware_model = hardware_info[0] if hardware_info and hardware_info[0] else 'unknown'
                hardware_model = output.get('version', {}).get('chassis', 'unknown')
+
+               # Extract Boot Method / System Image
+               boot_method = output.get('version', {}).get('system_image')
+               if not boot_method and isinstance(output.get('version', {}), dict):
+                    # Fallback check
+                    boot_method = output.get('version', {}).get('boot_image')
            
            if isinstance(output, dict) and isinstance(output.get('version', {}), str):
                version = output['version']
@@ -53,6 +64,9 @@ def sync_device_details(device_id):
            # Update hostname
            if dev.learned_hostname and dev.learned_hostname != device.hostname:
                device.hostname = dev.learned_hostname
+           
+           if boot_method:
+               device.boot_method = boot_method
 
            # Update Device
            if version: device.version = version

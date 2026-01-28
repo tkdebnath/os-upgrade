@@ -91,11 +91,31 @@ class WorkflowStepViewSet(viewsets.ModelViewSet):
     queryset = WorkflowStep.objects.all()
     serializer_class = WorkflowStepSerializer
 
+class ValidationCheckSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ValidationCheck
+        fields = '__all__'
+
 class JobSerializer(serializers.ModelSerializer):
     device_hostname = serializers.CharField(source='device.hostname', read_only=True)
     image_filename = serializers.CharField(source='image.filename', read_only=True)
     workflow_name = serializers.CharField(source='workflow.name', read_only=True)
     check_runs = CheckRunSerializer(many=True, read_only=True)
+    
+    # Enhanced Details
+    file_server_name = serializers.CharField(source='file_server.name', read_only=True)
+    file_server_address = serializers.CharField(source='file_server.address', read_only=True)
+    selected_checks_details = ValidationCheckSerializer(source='selected_checks', many=True, read_only=True)
+    
+    file_path = serializers.SerializerMethodField()
+    
+    def get_file_path(self, obj):
+        if obj.file_server and obj.image:
+             base = obj.file_server.base_path or ''
+             # Clean slashes
+             base = base.strip('/')
+             return f"/{base}/{obj.image.filename}" if base else f"/{obj.image.filename}"
+        return None
 
     class Meta:
         model = Job

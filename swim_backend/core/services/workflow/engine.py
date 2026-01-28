@@ -65,28 +65,50 @@ class WorkflowEngine:
         job.status = 'running'
         job.save()
 
-        steps = workflow.steps.all().order_by('order')
+        # 2. Determine Execution Plan (Dynamic or Static)
+        # Check if job.steps already contains a PLAN (steps with 'step_type')
+        # This allows views to inject a specific sequence (e.g. Distribution Only)
+        job.refresh_from_db()
+        existing_steps = job.steps or []
+        execution_plan = []
         
-        for step_model in steps:
+        # Check if we have a pre-defined plan in steps (look for 'step_type' in the JSON)
+        if existing_steps and any('step_type' in s for s in existing_steps):
+            # Convert JSON dicts to objects compatible with loop below
+            class DynamicStep:
+                def __init__(self, data):
+                    self.name = data.get('name', 'Unknown')
+                    self.step_type = data.get('step_type')
+                    self.config = data.get('config', {})
+            
+            execution_plan = [DynamicStep(s) for s in existing_steps if 'step_type' in s]
+        
+        else:
+            # Fallback to Workflow Model (Standard Behavior)
+            steps = workflow.steps.all().order_by('order')
+            execution_plan = list(steps)
+        
+        for step_model in execution_plan:
             # Check for cancellation
+            job.refresh_from_db()
             job.refresh_from_db()
             if job.status == 'cancelled':
                 log_update(self.job_id, "Workflow Cancelled by User.")
                 return
 
-            StepClass = self.get_step_class(step_model.step_type)
-            if not StepClass:
-                log_update(self.job_id, f"Unknown step type: {step_model.step_type}. Skipping.")
-                continue
-                
-            # Initialize Step
-            step_instance = StepClass(self.job_id, step_model.config)
-            
-            # Update UI Progress
-            self.update_job_step(job, step_model.name, "running")
-            
             # Execute
             try:
+                StepClass = self.get_step_class(step_model.step_type)
+                if not StepClass:
+                    log_update(self.job_id, f"Unknown step type: {step_model.step_type}. Skipping.")
+                    continue
+                    
+                # Initialize Step
+                step_instance = StepClass(self.job_id, step_model.config)
+                
+                # Update UI Progress
+                self.update_job_step(job, step_model.name, "running")
+
                 if not step_instance.can_proceed():
                     log_update(self.job_id, f"Skipping {step_model.name}: Dependencies not met.")
                     self.update_job_step(job, step_model.name, "skipped")
@@ -102,7 +124,7 @@ class WorkflowEngine:
                     else:
                         log_update(self.job_id, f"Workflow Aborted due to failure in {step_model.name}.")
                         job.status = 'failed'
-                        job.save()
+                        job.save(update_fields=['status'])
                         return
                         
             except Exception as e:
@@ -110,13 +132,13 @@ class WorkflowEngine:
                 log_update(self.job_id, f"Critical Error in {step_model.name}: {e}")
                 self.update_job_step(job, step_model.name, "failed")
                 job.status = 'failed'
-                job.save()
+                job.save(update_fields=['status'])
                 return
 
         # If we got here, workflow is done
         job.status = 'success' # Or partial?
         log_update(self.job_id, "Workflow Completed Successfully.")
-        job.save()
+        job.save(update_fields=['status'])
 
     def update_job_step(self, job, step_name, status):
         # Helper to update the JSON steps field
@@ -132,4 +154,4 @@ class WorkflowEngine:
                 'status': status,
                 'timestamp': timezone.now().strftime("%H:%M:%S")
             })
-        j.save()
+        j.save(update_fields=['steps'])

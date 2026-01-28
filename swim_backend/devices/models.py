@@ -39,6 +39,10 @@ class DeviceModel(models.Model):
     # Dynamic Scanning
     golden_image_path = models.CharField(max_length=255, blank=True, null=True, help_text="Remote folder path to scan for images")
     default_file_server = models.ForeignKey('images.FileServer', on_delete=models.SET_NULL, null=True, blank=True)
+    
+    # New Multi-Image Support
+    default_image = models.ForeignKey('images.Image', on_delete=models.SET_NULL, null=True, blank=True, related_name='default_for_models', help_text="The Golden Image")
+    supported_images = models.ManyToManyField('images.Image', blank=True, related_name='supported_models', help_text="List of allowed images")
 
     def __str__(self):
         return self.name
@@ -58,6 +62,8 @@ class Device(models.Model):
     # New fields for Feature Parity
     FAMILY_CHOICES = [('Switch', 'Switch'), ('Router', 'Router'), ('AP', 'AP'), ('WLC', 'WLC')]
     family = models.CharField(max_length=20, choices=FAMILY_CHOICES, default='Switch')
+    boot_method = models.CharField(max_length=255, blank=True, null=True, help_text="System image file path or boot method")
+    mac_address = models.CharField(max_length=100, blank=True, null=True, help_text="Device MAC Address")
     preferred_file_server = models.ForeignKey('images.FileServer', on_delete=models.SET_NULL, null=True, blank=True, related_name='preferred_devices')
     
     REACHABILITY_CHOICES = [('Reachable', 'Reachable'), ('Unreachable', 'Unreachable'), ('Unknown', 'Unknown')]

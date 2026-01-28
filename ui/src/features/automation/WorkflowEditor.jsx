@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { Plus, X, GripVertical, Save, Play, Clock, CheckCircle, Server, FileText, Trash2 } from 'lucide-react';
+import ConfirmModal from '../inventory/ConfirmModal';
 
 const STEP_TYPES = [
     { type: 'readiness', label: 'Readiness Check', icon: CheckCircle, color: 'text-indigo-600' },
@@ -19,6 +20,9 @@ const WorkflowEditor = () => {
     const [steps, setSteps] = useState([]);
     const [isSaving, setIsSaving] = useState(false);
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+    const [confirmModalData, setConfirmModalData] = useState(null);
+    const [showCreateModal, setShowCreateModal] = useState(false);
+    const [newWorkflowName, setNewWorkflowName] = useState('');
 
     useEffect(() => {
         fetchWorkflows();
@@ -48,6 +52,11 @@ const WorkflowEditor = () => {
     const handleDragEnd = (result) => {
         if (!result.destination) return;
 
+        if (result.destination.index < 2 || result.source.index < 2) {
+            // Guard: Cannot move locked items (source < 2) or move items INTO locked zone (dest < 2)
+            return;
+        }
+
         const items = Array.from(steps);
         const [reorderedItem] = items.splice(result.source.index, 1);
         items.splice(result.destination.index, 0, reorderedItem);
@@ -73,6 +82,7 @@ const WorkflowEditor = () => {
     };
 
     const removeStep = (index) => {
+        if (index < 2) return; // Cannot remove fixed steps
         const newSteps = [...steps];
         newSteps.splice(index, 1);
         setSteps(newSteps.map((s, i) => ({ ...s, order: i + 1 })));
@@ -98,25 +108,71 @@ const WorkflowEditor = () => {
 
             await axios.post(`/api/workflows/${selectedWorkflow.id}/update_steps/`, payload);
             await fetchWorkflows(); // Refresh
-            alert("Workflow saved successfully!");
+            setConfirmModalData({
+                title: "Success",
+                message: "Workflow saved successfully!",
+                confirmText: "OK",
+                showCancel: false,
+                onConfirm: () => setConfirmModalData(null),
+                onCancel: () => setConfirmModalData(null)
+            });
         } catch (error) {
             console.error("Failed to save", error);
-            alert("Failed to save workflow.");
+            setConfirmModalData({
+                title: "Error",
+                message: "Failed to save workflow.",
+                confirmText: "Close",
+                showCancel: false,
+                isDestructive: true,
+                onConfirm: () => setConfirmModalData(null),
+                onCancel: () => setConfirmModalData(null)
+            });
         } finally {
             setIsSaving(false);
         }
     };
 
-    const createNewWorkflow = async () => {
-        const name = prompt("Enter workflow name:");
-        if (name) {
-            try {
-                const res = await axios.post('/api/workflows/', { name, description: 'Custom workflow' });
-                setWorkflows([...workflows, res.data]);
-                selectWorkflow(res.data);
-            } catch (error) {
-                console.error("Failed to create workflow", error);
-            }
+    const createNewWorkflow = () => {
+        setNewWorkflowName('');
+        setShowCreateModal(true);
+    };
+
+    const handleCreateSubmit = async () => {
+        if (!newWorkflowName.trim()) return;
+        try {
+            // New Requirement: Enforce Readiness (1) and Distribution (2)
+            const initialSteps = [
+                { name: 'Readiness Check', step_type: 'readiness', order: 1, config: {} },
+                { name: 'Software Distribution', step_type: 'distribution', order: 2, config: {} }
+            ];
+
+            // Create workflow
+            const res = await axios.post('/api/workflows/', { name: newWorkflowName, description: 'Custom workflow' });
+
+            // Immediately add mandatory steps
+            // Note: The API 'create' might return an empty workflow. We need to save the steps.
+            // We can reuse the save/update endpoint, but 'saveWorkflow' uses 'selectedWorkflow'.
+            // Alternatively, we can assume the backend creates empty and we just select it, 
+            // and the Local State 'steps' will be populated with our defaults, 
+            // and then user hits Save? 
+            // BETTER: Initialize 'steps' state with our forced steps upon selection.
+            // But if we fetch from backend, it will be empty.
+            // Solution: We must push these steps to backend immediately or frontend must handle "New Empty = Default Steps" logic.
+            // Let's UPDATE the workflow with mandatory steps right away.
+            const newWf = res.data;
+            await axios.post(`/api/workflows/${newWf.id}/update_steps/`, initialSteps);
+
+            // Re-fetch to get clean state
+            const updatedRes = await axios.get('/api/workflows/'); // or fetch individual
+            const updatedWfs = updatedRes.data.results || updatedRes.data;
+            const freshWf = updatedWfs.find(w => w.id === newWf.id);
+
+            setWorkflows(updatedWfs); // Update list
+            selectWorkflow(freshWf);
+            setShowCreateModal(false);
+        } catch (error) {
+            console.error("Failed to create workflow", error);
+            alert("Failed to create workflow"); // Fallback or use ConfirmModal
         }
     };
 
@@ -208,13 +264,27 @@ const WorkflowEditor = () => {
                                                 try {
                                                     await axios.post(`/api/workflows/${selectedWorkflow.id}/set_default/`);
                                                     await fetchWorkflows();
-                                                    // Only update flag locally to avoid full re-select flicker
                                                     setWorkflows(prev => prev.map(w => ({ ...w, is_default: w.id === selectedWorkflow.id })));
                                                     setSelectedWorkflow({ ...selectedWorkflow, is_default: true });
-                                                    alert("Set as Default Workflow");
+                                                    setConfirmModalData({
+                                                        title: "Success",
+                                                        message: "Set as Default Workflow",
+                                                        confirmText: "OK",
+                                                        showCancel: false,
+                                                        onConfirm: () => setConfirmModalData(null),
+                                                        onCancel: () => setConfirmModalData(null)
+                                                    });
                                                 } catch (e) {
                                                     console.error(e);
-                                                    alert("Failed to set default");
+                                                    setConfirmModalData({
+                                                        title: "Error",
+                                                        message: "Failed to set default",
+                                                        confirmText: "Close",
+                                                        showCancel: false,
+                                                        isDestructive: true,
+                                                        onConfirm: () => setConfirmModalData(null),
+                                                        onCancel: () => setConfirmModalData(null)
+                                                    });
                                                 }
                                             }}
                                             className="px-3 py-2 text-sm text-gray-600 hover:bg-gray-200 rounded font-medium border border-gray-300"
@@ -246,9 +316,15 @@ const WorkflowEditor = () => {
                                             {steps.map((step, index) => {
                                                 const typeDef = STEP_TYPES.find(t => t.type === step.step_type) || STEP_TYPES[0];
                                                 const Icon = typeDef.icon;
+                                                const isLocked = index < 2; // Position 1 and 2 are locked
 
                                                 return (
-                                                    <Draggable key={step.id || `step-${index}`} draggableId={String(step.id || `step-${index}`)} index={index}>
+                                                    <Draggable
+                                                        key={step.id || `step-${index}`}
+                                                        draggableId={String(step.id || `step-${index}`)}
+                                                        index={index}
+                                                        isDragDisabled={isLocked}
+                                                    >
                                                         {(provided, snapshot) => (
                                                             <div
                                                                 ref={provided.innerRef}
@@ -256,12 +332,15 @@ const WorkflowEditor = () => {
                                                                 className={`bg-white p-4 rounded border shadow-sm flex items-center group ${snapshot.isDragging ? 'ring-2 ring-blue-500 z-10' : 'border-gray-200'}`}
                                                             >
                                                                 {/* Drag Handle */}
-                                                                <div {...provided.dragHandleProps} className="mr-3 text-gray-400 cursor-grab hover:text-gray-600">
-                                                                    <GripVertical size={20} />
+                                                                <div
+                                                                    {...provided.dragHandleProps}
+                                                                    className={`mr-3 ${isLocked ? 'text-gray-200 cursor-not-allowed' : 'text-gray-400 cursor-grab hover:text-gray-600'}`}
+                                                                >
+                                                                    {isLocked ? <CheckCircle size={20} className="text-gray-300" /> : <GripVertical size={20} />}
                                                                 </div>
 
                                                                 {/* Icon */}
-                                                                <div className={`p-2 rounded bg-gray-100 mr-4 ${typeDef.color}`}>
+                                                                <div className={`p-2 rounded bg-gray-100 mr-4 ${typeDef.color} ${isLocked ? 'opacity-70' : ''}`}>
                                                                     <Icon size={20} />
                                                                 </div>
 
@@ -282,34 +361,39 @@ const WorkflowEditor = () => {
                                                                             />
                                                                         </div>
                                                                     )}
-                                    {step.step_type === 'ping' && (
-                                        <div className="mt-2 flex items-center space-x-4 text-sm">
-                                            <div className="flex items-center">
-                                                <span className="mr-2 text-gray-600">Retries:</span>
-                                                <input
-                                                    type="number"
-                                                    value={step.config?.retries || 3}
-                                                    onChange={(e) => updateStepConfig(index, 'retries', parseInt(e.target.value))}
-                                                    className="w-16 px-2 py-1 border rounded text-xs"
-                                                />
-                                            </div>
-                                            <div className="flex items-center">
-                                                <span className="mr-2 text-gray-600">Interval (s):</span>
-                                                <input
-                                                    type="number"
-                                                    value={step.config?.interval || 10}
-                                                    onChange={(e) => updateStepConfig(index, 'interval', parseInt(e.target.value))}
-                                                    className="w-16 px-2 py-1 border rounded text-xs"
-                                                />
-                                            </div>
-                                        </div>
-                                    )}
+                                                                    {step.step_type === 'ping' && (
+                                                                        <div className="mt-2 flex items-center space-x-4 text-sm">
+                                                                            <div className="flex items-center">
+                                                                                <span className="mr-2 text-gray-600">Retries:</span>
+                                                                                <input
+                                                                                    type="number"
+                                                                                    value={step.config?.retries || 3}
+                                                                                    onChange={(e) => updateStepConfig(index, 'retries', parseInt(e.target.value))}
+                                                                                    className="w-16 px-2 py-1 border rounded text-xs"
+                                                                                />
+                                                                            </div>
+                                                                            <div className="flex items-center">
+                                                                                <span className="mr-2 text-gray-600">Interval (s):</span>
+                                                                                <input
+                                                                                    type="number"
+                                                                                    value={step.config?.interval || 10}
+                                                                                    onChange={(e) => updateStepConfig(index, 'interval', parseInt(e.target.value))}
+                                                                                    className="w-16 px-2 py-1 border rounded text-xs"
+                                                                                />
+                                                                            </div>
+                                                                        </div>
+                                                                    )}
                                                                 </div>
 
                                                                 {/* Delete */}
-                                                                <button onClick={() => removeStep(index)} className="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                                    <X size={20} />
-                                                                </button>
+                                                                {!isLocked && (
+                                                                    <button onClick={() => removeStep(index)} className="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                                        <X size={20} />
+                                                                    </button>
+                                                                )}
+                                                                {isLocked && (
+                                                                    <span className="text-xs text-gray-400 italic px-2">Fixed</span>
+                                                                )}
                                                             </div>
                                                         )}
                                                     </Draggable>
@@ -345,7 +429,46 @@ const WorkflowEditor = () => {
                     </div>
                 )}
             </div>
-        </div>
+            {
+                confirmModalData && (
+                    <ConfirmModal
+                        {...confirmModalData}
+                        onCancel={() => setConfirmModalData(null)}
+                    />
+                )
+            }
+            {showCreateModal && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                    <div className="bg-white rounded-lg shadow-xl p-6 w-96">
+                        <h3 className="text-lg font-bold mb-4">Create New Workflow</h3>
+                        <input
+                            type="text"
+                            value={newWorkflowName}
+                            onChange={(e) => setNewWorkflowName(e.target.value)}
+                            placeholder="Workflow Name"
+                            className="w-full border border-gray-300 rounded p-2 mb-4 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                            autoFocus
+                            onKeyDown={(e) => e.key === 'Enter' && handleCreateSubmit()}
+                        />
+                        <div className="flex justify-end space-x-2">
+                            <button
+                                onClick={() => setShowCreateModal(false)}
+                                className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleCreateSubmit}
+                                disabled={!newWorkflowName.trim()}
+                                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+                            >
+                                Create
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div >
     );
 };
 

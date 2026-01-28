@@ -3,7 +3,7 @@ import threading
 import re
 from datetime import datetime
 from genie.conf.base.device import Device as GenieDevice
-from ..base import BaseStep
+from swim_backend.core.services.workflow.base import BaseStep
 from swim_backend.core.services.diff_service import log_update
 
 # Local Semaphore if we want to isolate, or import global
@@ -92,6 +92,7 @@ class DeviceFileDownloader:
             except:
                 pass
     
+    
     def is_connected(self):
         """Check if device connection is alive."""
         try:
@@ -102,6 +103,73 @@ class DeviceFileDownloader:
         except:
             pass
         return False
+
+    def get_file_size(self, filename, destination='flash:'):
+        """Get file size in bytes if it exists, else None."""
+        try:
+            # Command: dir flash:filename
+            # Output example: "   33554432 Jan 01 2024 12:00:00 filename.bin"
+            cmd = f"dir {destination}{filename}"
+            output = self.device.execute(cmd)
+            
+            # Pattern: size in bytes followed by date/time and filename
+            # Adjust regex based on common IOS format
+            # Example line: "  123456  -rw-   ..." or "  123456  Jul 1 2024 ..."
+            # Basic fallback: look for the number before the filename?
+            # Or use 'dir' summary?
+            # Let's try matching a large number before permission flags or date
+            
+            # Simple approach: Check if "No such file" or similar
+            if "No such file" in output or "Error opening" in output:
+                return None
+                
+            # Try to find file entry
+            # Pattern: <size> <date> <time> <filename>
+            match = re.search(r'\s+(\d+)\s+\w{3}\s+\d+', output)
+            if match:
+                return int(match.group(1))
+                
+            # Fallback check
+            if filename in output:
+                 # Try to extract the first large number
+                 nums = re.findall(r'(\d+)', output)
+                 # Filter mostly likely candidates (e.g. > 1000)
+                 candidates = [int(n) for n in nums if int(n) > 1000]
+                 if candidates:
+                     return candidates[0] # Best guess
+            
+            return None
+        except Exception as e:
+            self.log(f"Error checking file size: {e}")
+            return None
+
+    def verify_file_md5(self, filename, expected_md5, destination='flash:'):
+        """Verify MD5 checksum of a file on the device."""
+        try:
+            self.log(f"Calculating MD5 for {filename}...")
+            # Command: verify /md5 flash:filename
+            cmd = f"verify /md5 {destination}{filename}"
+            
+            # This can take time, increase timeout
+            output = self.device.execute(cmd, timeout=300)
+            
+            # Output contains: "Result = <md5>" or " = <md5>"
+            # Expected MD5 might be in output if valid
+            
+            # Clean output and extract hex string
+            # Look for 32 hex chars
+            found_md5s = re.findall(r'[0-9a-fA-F]{32}', output)
+            
+            for md5 in found_md5s:
+                if md5.lower() == expected_md5.lower():
+                    return True
+            
+            return False
+            
+        except Exception as e:
+            self.log(f"Error verifying MD5: {e}")
+            return False
+
     
     def reconnect(self):
         """Reconnect to device if connection was lost."""
@@ -432,6 +500,13 @@ class DistributeStep(BaseStep):
         job = self.get_job()
         device = job.device
         
+        if not job.image:
+             self.log("No image assigned to job. Skipping Distribution.")
+             # If distribution is mandatory, this should fail. 
+             # Or if smart enough, skip.
+             # Assuming fail is safer if step exists.
+             return 'failed', "No image assigned to job"
+
         self.log("Waiting for distribution slot (Max 40 concurrent)...")
         
         with DISTRIBUTION_SEMAPHORE:
@@ -494,7 +569,7 @@ class DistributeStep(BaseStep):
         # but let's stick to standard URL construction.
         
         # Removing leading/trailing slashes for clean join
-        base_path = file_server.base_path.strip('/')
+        base_path = file_server.base_path.strip('/') if file_server.base_path else ''
         filename = job.image.filename
         
         # Protocol handling
@@ -502,9 +577,10 @@ class DistributeStep(BaseStep):
         if proto not in ['http', 'https', 'ftp', 'scp', 'tftp']:
              self.log(f"Warning: Protocol {proto} might not be supported by 'copy' command directly.")
 
-        # Construct URL
+        # Construct URL cleanly
         # http://192.168.1.5:80/images/ios.bin
-        file_url = f"{proto}://{file_server.address}:{file_server.port}/{base_path}/{filename}"
+        path_part = f"{base_path}/{filename}" if base_path else filename
+        file_url = f"{proto}://{file_server.address}:{file_server.port}/{path_part}"
         
         # 2. Prepare Device Config for Genie
         device = job.device

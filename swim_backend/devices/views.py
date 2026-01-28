@@ -7,7 +7,13 @@ import io
 from .plugins.registry import PluginRegistry
 from swim_backend.core.services.sync_service import run_sync_task
 
+# Import ImageSerializer
+from swim_backend.images.models import ImageSerializer
+
 class DeviceModelSerializer(serializers.ModelSerializer):
+    supported_images_details = ImageSerializer(source='supported_images', many=True, read_only=True)
+    default_image_details = ImageSerializer(source='default_image', read_only=True)
+    
     class Meta:
         model = DeviceModel
         fields = '__all__'
@@ -97,17 +103,56 @@ class DeviceSerializer(serializers.ModelSerializer):
     def get_golden_image(self, obj):
         if not obj.model:
             return None
+        
+        # Prefer new model
+        if obj.model.default_image:
+            # Build list of options
+            options = []
+            if obj.model.default_image:
+                 options.append({
+                     'id': obj.model.default_image.id,
+                     'version': obj.model.default_image.version,
+                     'file': obj.model.default_image.filename,
+                     'tag': 'Default'
+                 })
+            
+            for img in obj.model.supported_images.all():
+                # Avoid dupes
+                if obj.model.default_image and img.id == obj.model.default_image.id:
+                    continue
+                options.append({
+                     'id': img.id,
+                     'version': img.version,
+                     'file': img.filename,
+                     'tag': 'Supported'
+                })
+
+            return {
+                'id': obj.model.default_image.id,
+                'version': obj.model.default_image.version,
+                'file': obj.model.default_image.filename,
+                'size': obj.model.default_image.size_bytes,
+                'md5': obj.model.default_image.md5_checksum,
+                'is_new_model': True,
+                'available_images': options
+            }
+            
+        # Fallback
         return {
             'version': obj.model.golden_image_version,
-            'file': obj.model.golden_image_file
+            'file': obj.model.golden_image_file,
+            'is_new_model': False,
+            'available_images': []
         }
 
 class DeviceModelViewSet(viewsets.ModelViewSet):
     queryset = DeviceModel.objects.all().order_by('name')
     serializer_class = DeviceModelSerializer
+    lookup_field = 'name'
+    lookup_value_regex = '[^/]+'
 
     @action(detail=True, methods=['get'])
-    def scan_images(self, request, pk=None):
+    def scan_images(self, request, *args, **kwargs):
         """
         Scans the configured path for this model on its default file server.
         Returns a list of potential image files.
@@ -180,44 +225,106 @@ class DeviceViewSet(viewsets.ModelViewSet):
         Runs pre-upgrade checks on a list of devices.
         Checks: Reachability, Compliance, config-register, flash space.
         """
+        from swim_backend.core.readiness import check_readiness
+        from swim_backend.images.models import Image
+        
         device_ids = request.data.get('ids', [])
         devices = Device.objects.filter(id__in=device_ids)
         results = []
         
+        # Helper class to mimic Job object for readiness function
+        class MockImage:
+            def __init__(self, size):
+                self.size_bytes = size
+                
+        class MockJob:
+            def __init__(self, jid, img_size):
+                self.id = jid
+                self.image = MockImage(img_size) if img_size else None
+                self.selected_checks = Device.objects.none() # Empty QuerySet-like
+
         for dev in devices:
-            # Mock Logic
-            checks = []
+            # 1. Determine Target Image Size
+            target_size = 0
+            golden_version = None
             
-            # 1. Reachability
-            if dev.reachability == 'Reachable':
-                checks.append({'name': 'Reachability', 'status': 'Pass', 'message': 'Device is reachable'})
-            else:
-                checks.append({'name': 'Reachability', 'status': 'Fail', 'message': 'Device is unreachable'})
-                
-            # 2. Flash Check (Mock)
-            # Randomly maintain some failures for demo if needed, but for now pass
-            checks.append({'name': 'Flash Space', 'status': 'Pass', 'message': 'Free space: 4.2GB'})
-            
-            # 3. Config Register (Mock)
-            checks.append({'name': 'Config Register', 'status': 'Pass', 'message': '0x2102'})
-            
-            # 4. Golden Image
-            golden = None
             if dev.model and dev.model.golden_image_version:
-                golden = dev.model.golden_image_version
-                checks.append({'name': 'Golden Image Defined', 'status': 'Pass', 'message': f'Target: {golden}'})
+                golden_version = dev.model.golden_image_version
+                if dev.model:
+                     # 1. Prefer Explicit Size from Standard
+                     if dev.model.golden_image_size:
+                         target_size = dev.model.golden_image_size
+                     
+                     # 2. Fallback to Image Object Size
+                     elif dev.model.golden_image_file:
+                         img = Image.objects.filter(filename=dev.model.golden_image_file).first()
+                         if img:
+                             target_size = img.size_bytes
+                         else:
+                             # Default fallback if image record missing but file defined (e.g. 500MB)
+                             target_size = 500 * 1024 * 1024 
+
+            # 2. Run Real Checks
+            # Use a consistent session key for logs
+            session_id = f"readiness_check_{dev.id}"
+            mock_job = MockJob(session_id, target_size)
+            
+            ready, check_results = check_readiness(dev, mock_job)
+            
+            # 3. Map Results to UI Format
+            ui_checks = []
+            
+            # Map 'connection' -> Reachability
+            if 'connection' in check_results:
+                c = check_results['connection']
+                status = 'Pass' if c['status'] == 'success' else 'Fail'
+                ui_checks.append({'name': 'Reachability', 'status': status, 'message': c['message']})
             else:
-                checks.append({'name': 'Golden Image Defined', 'status': 'Warning', 'message': 'No standard defined'})
+                # If no connection key, assume it passed connected phase if we got results, or implicit pass?
+                # Actually check_readiness returns connection failure explicitly if it fails.
+                # If key missing, implies connection was fine? 
+                # Let's assume explicit keys in new readiness.py? 
+                # Actually readiness.py ONLY adds 'connection' on failure.
+                # If connected successfully, we should add a Pass.
+                pass 
+            
+            # Logic: If readiness.py returned, connection succeeded unless it returned early.
+            if not any(c['name'] == 'Reachability' for c in ui_checks):
+                 ui_checks.append({'name': 'Reachability', 'status': 'Pass', 'message': 'Device is reachable'})
+
+            # Map 'flash_memory'
+            if 'flash_memory' in check_results:
+                c = check_results['flash_memory']
+                status = 'Pass' if c['status'] == 'success' else 'Fail'
+                ui_checks.append({'name': 'Flash Space', 'status': status, 'message': c['message']})
+
+            # Map 'config_register'
+            if 'config_register' in check_results:
+                c = check_results['config_register']
+                status = 'Pass' if c['status'] == 'success' else 'Warning' # or Fail
+                ui_checks.append({'name': 'Config Register', 'status': status, 'message': c['message']})
+
+            # Map 'startup_config'
+            if 'startup_config' in check_results:
+                c = check_results['startup_config']
+                status = 'Pass' if c['status'] == 'success' else 'Warning'
+                ui_checks.append({'name': 'Startup Config', 'status': status, 'message': c['message']})
                 
-            status = 'Ready' if all(c['status'] == 'Pass' for c in checks) else 'Not Ready'
+            # Golden Image Check (Logic remains in View as it depends on DB model, not device state)
+            if golden_version:
+                ui_checks.append({'name': 'Golden Image Defined', 'status': 'Pass', 'message': f'Target: {golden_version}'})
+            else:
+                ui_checks.append({'name': 'Golden Image Defined', 'status': 'Warning', 'message': 'No standard defined'})
+
+            status_str = 'Ready' if ready else 'Not Ready'
             
             results.append({
                 'id': dev.id,
                 'hostname': dev.hostname,
                 'current_version': dev.version,
-                'target_version': golden,
-                'status': status,
-                'checks': checks
+                'target_version': golden_version,
+                'status': status_str,
+                'checks': ui_checks
             })
             
         return Response(results)
@@ -225,34 +332,144 @@ class DeviceViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['post'])
     def distribute_image(self, request):
         """
-        Initiates image distribution job.
+        Initiates image distribution job using the SELECTED WORKFLOW.
         """
         device_ids = request.data.get('ids', [])
+        workflow_id = request.data.get('workflow_id') # Get from frontend
         created_jobs = []
-        from swim_backend.core.models import Job
+        from swim_backend.core.models import Job, Workflow
         from swim_backend.core.services.job_runner import run_swim_job
         import threading
 
+        # Resolve Workflow
+        workflow = None
+        if workflow_id:
+            try:
+                workflow = Workflow.objects.get(id=workflow_id)
+            except Workflow.DoesNotExist:
+                pass
+        
+        # Fallback if no workflow selected (shouldn't happen in new wizard)
+        if not workflow:
+            workflow = Workflow.objects.filter(name='Standard Distribution').first()
+            if not workflow:
+                # Create basic one if missing
+                from swim_backend.core.models import Workflow, WorkflowStep
+                workflow = Workflow.objects.create(name='Standard Distribution')
+                WorkflowStep.objects.create(workflow=workflow, name='Software Distribution', step_type='distribution', order=1)
+
         for dev_id in device_ids:
-            # Find the target image from device model
             dev = Device.objects.get(id=dev_id)
-            # Find Image object matching the golden_image_file logic if possible
-            # For prototype, we just link the device, image link is optional or we find it
-            # We need to set 'image' if we want job_runner to work fully (it uses job.image.filename)
-            # Let's mock finding or creating an Image object for the golden image
+            
+            # Find Image (Golden Image logic)
             from swim_backend.images.models import Image
             target_image = None
-            if dev.model and dev.model.golden_image_file:
-                 target_image, _ = Image.objects.get_or_create(
-                     filename=dev.model.golden_image_file, 
-                     defaults={'version': dev.model.golden_image_version or '0.0.0'}
+            # Find Image (Golden Image logic)
+            from swim_backend.images.models import Image
+            target_image = None
+            
+            # Check for override
+            image_map = request.data.get('image_map', {})
+            if str(dev_id) in image_map:
+                try:
+                    target_image = Image.objects.get(id=int(image_map[str(dev_id)]))
+                except:
+                     pass
+
+            if not target_image and dev.model:
+                 if dev.model.default_image:
+                     target_image = dev.model.default_image
+                 elif dev.model.golden_image_file:
+                     target_image, _ = Image.objects.get_or_create(
+                         filename=dev.model.golden_image_file, 
+                         defaults={'version': dev.model.golden_image_version or '0.0.0'}
+                     )
+                     # Sync meta... (keeping existing logic for safety)
+                     if dev.model.golden_image_size and target_image.size_bytes != dev.model.golden_image_size:
+                         target_image.size_bytes = dev.model.golden_image_size
+                         target_image.save()
+
+            if not target_image:
+                 job = Job.objects.create(
+                    device_id=dev_id,
+                    status='failed',
+                    log="Error: Device has no Golden Image assigned. Cannot distribute."
                  )
+                 created_jobs.append(job)
+                 continue
+
+            # Build Execution Plan from Workflow
+            # We want to INCLUDE 'Readiness' (marked success) and 'Distribution' (pending)
+            # And potentially others as 'pending' but Engine will stop after Distribution?
+            # Actually, this is 'distribute_image' endpoint. The user might want to STOP after distribution?
+            # The Wizard typically runs Distribution, then stops for the user to click 'Next'.
+            # So we should probably ONLY include up to Distribution?
+            # User requirement: "job process is not displaying all steps from the selected workflow"
+            # This implies they want to see the FULL workflow in the job details, even if we only run part of it?
+            # But if we create a job and it finishes Distribution, does it mark the job as 'completed'?
+            # If the job finishes all PENDING steps, it completes.
+            # So if we add 'Activation' as pending, the engine will run it immediately!
+            # We don't want that. We want to PAUSE or separate jobs.
+            # IN THE WIZARD: Distribution is a distinct "Apply" action. 
+            # Step 4 (Distribute) -> Button "Start Distribution".
+            # Step 5 (Activation) -> Button "Activate".
+            # These are SEPARATE actions creating SEPARATE jobs usually, OR resuming?
+            # Current architecture creates NEW jobs for each action (distribute_image, activate_image).
+            # So for 'distribute_image' job, we want it to EXECUTE Distribution.
+            # If we include 'Activation' step in this job, the engine WILL execute it unless we mark it 'skipped' or 'on_hold'?
+            # Our engine doesn't support 'on_hold'.
+            # SO: We should include readiness (success) and distribution (pending).
+            # What about subsequent steps? If we omit them, the user complains "not displaying all steps".
+            # BUT if we include them, they might run.
+            
+            # compromise: The 'distribute_image' action implies we only want to DO distribution.
+            # If the user wants to see the full workflow, maybe the UI should show the workflow definition, not just the job steps?
+            # OR, we add them but with a status that the engine ignores? "future"?
+            # Engine loops through `execution_plan`.
+            # If we don't put them in `job.steps` (the history), the UI won't show them if it only reads `job.steps`.
+            # If the UI reads `job.workflow.steps`, it would show everything.
+            # The issue says: "job process is not displaying all steps... during activation" and "redundant readiness... during distribution".
+            
+            # Let's focus on Distribution Job first.
+            # It should show Readiness (Completed) + Distribution (Running).
+            # Logic: Include everything UP TO 'distribution'.
+            # Mark ALL as 'pending' so they run (as requested by user to "re-enable... not skip").
+            # STOP adding steps after 'distribution' for this job.
+            
+            job_steps = []
+            workflow_steps = workflow.steps.all().order_by('order')
+            
+            found_dist = False
+            for step in workflow_steps:
+                # Add step as pending
+                job_steps.append({
+                    'name': step.name,
+                    'step_type': step.step_type,
+                    'status': 'pending', 
+                    'config': step.config
+                })
+                
+                if step.step_type == 'distribution':
+                    found_dist = True
+                    break 
+            
+            # If workflow has no distribution step (unlikely with new validation), fallback
+            if not found_dist:
+                # Just add a distinct distribution step
+                 job_steps.append({
+                    'name': 'Software Distribution',
+                    'step_type': 'distribution',
+                    'status': 'pending',
+                    'config': {}
+                })
 
             job = Job.objects.create(
                 device_id=dev_id,
                 image=target_image,
                 file_server=dev.model.default_file_server if dev.model else None,
-                status='pending'
+                status='pending',
+                workflow=workflow,
+                steps=job_steps # Pre-filled history
             )
             created_jobs.append(job)
             
@@ -273,10 +490,11 @@ class DeviceViewSet(viewsets.ModelViewSet):
         """
         import threading
         import uuid
-        from swim_backend.core.models import Job, ValidationCheck
+        from swim_backend.core.models import Job, ValidationCheck, Workflow
         from swim_backend.core.services.job_runner import orchestrate_jobs
         
         device_ids = request.data.get('ids', [])
+        image_map = request.data.get('image_map', {})
         checks_config = request.data.get('checks', [])
         schedule_time = request.data.get('schedule_time')
         execution_config = request.data.get('execution_config', {})
@@ -298,8 +516,83 @@ class DeviceViewSet(viewsets.ModelViewSet):
         
         job_map = {} # device_id -> job_id
         
+        # Prepare Dynamic Execution Plan
+        # 1. Fetch Workflow Logic
+        execution_plan = []
+        workflow_obj = None
+        
+        if workflow_id:
+            try:
+                workflow_obj = Workflow.objects.get(id=workflow_id)
+                workflow_steps = workflow_obj.steps.all().order_by('order')
+                
+                # Iterate ALL steps to build full history
+                for s in workflow_steps:
+                    # Mark ALL as pending to ensure they show up and run (re-verification)
+                    execution_plan.append({
+                        'name': s.name,
+                        'step_type': s.step_type,
+                        'config': s.config,
+                        'status': 'pending'
+                    })
+                    
+            except Workflow.DoesNotExist:
+                pass
+        
+        # Fallback if no workflow or steps (should imply legacy behavior or injection)
+        if not execution_plan:
+             execution_plan.insert(0, {
+                'name': 'Software Activation',
+                'step_type': 'activation',
+                'config': {},
+                'status': 'pending'
+            })
+        else:
+            # Ensure Activation exists in the plan?
+            has_activation = any(s['step_type'] == 'activation' for s in execution_plan)
+            
+            if not has_activation:
+                execution_plan.append({
+                    'name': 'Software Activation',
+                    'step_type': 'activation',
+                    'config': {},
+                    'status': 'pending'
+                })
+
         # Helper to create job
         def create_activation_job(dev_id, mode, is_scheduled_active):
+            from swim_backend.devices.models import Device
+            from swim_backend.core.models import FileServer
+            from swim_backend.images.models import Image
+
+            device = Device.objects.get(id=dev_id)
+            
+            # Auto-assign Golden Image
+            target_image = None
+            
+            # Check for override
+            if str(dev_id) in image_map:
+                try:
+                    target_image = Image.objects.get(id=int(image_map[str(dev_id)]))
+                except:
+                     pass
+
+            if not target_image and device.model:
+                 if device.model.default_image:
+                     target_image = device.model.default_image
+                 elif device.model.golden_image_file:
+                     target_image, _ = Image.objects.get_or_create(
+                         filename=device.model.golden_image_file, 
+                         defaults={'version': device.model.golden_image_version or '0.0.0'}
+                     )
+            
+            # Auto-assign File Server
+            job_fs = None
+            if device.site and device.site.region and device.site.region.preferred_file_server:
+                job_fs = device.site.region.preferred_file_server
+            else:
+                job_fs = FileServer.objects.filter(is_global_default=True).first()
+
             status = 'pending'
             if schedule_time:
                 # If scheduling for later
@@ -308,9 +601,8 @@ class DeviceViewSet(viewsets.ModelViewSet):
                 else:
                     status = 'pending'
             else:
-                # Run Now - dealt with by orchestrator, usually 'pending' then triggered
                 status = 'pending'
-                
+            
             workflow_obj = None
             if workflow_id:
                 try:
@@ -321,17 +613,20 @@ class DeviceViewSet(viewsets.ModelViewSet):
             job = Job.objects.create(
                 device_id=dev_id,
                 status=status,
-                distribution_time=schedule_time, # Set distribution time to schedule time for UI visibility
+                image=target_image,
+                file_server=job_fs,
+                distribution_time=schedule_time, 
                 activation_time=schedule_time,
                 task_name=task_name,
                 batch_id=batch_id,
                 execution_mode=mode,
-                workflow=workflow_obj
+                workflow=workflow_obj,
+                steps=execution_plan  # INJECT DYNAMIC PLAN
             )
             created_jobs.append(job)
             job_map[dev_id] = job.id
             
-            # Link Checks
+            # Link Checks (Legacy support for check runner)
             for cfg in checks_config:
                 try:
                     chk = ValidationCheck.objects.get(id=cfg['id'])

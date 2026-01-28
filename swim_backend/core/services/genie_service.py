@@ -83,12 +83,11 @@ def create_genie_device(device, job_id_or_path):
         # Fallback for environment without Genie installed
         logger.warning("Genie not installed. Returning Mock Device.")
         return GenieDevice(name=device.hostname), dir_path
-    except Exception as e:
-         logger.error(f"Error creating device: {e}")
-         # Return a mock device so the caller doesn't crash, but it won't connect.
-         # Or maybe we should return a device that fails on connect?
-         # For now, return mock but log error.
-         return GenieDevice(name=device.hostname), dir_path
+    except ImportError:
+        # Fallback for environment without Genie installed
+        logger.warning("Genie not installed. Returning Mock Device.")
+        return GenieDevice(name=device.hostname), dir_path
+    # Removed generic Exception catch to allow real connection errors to propagate
 
 
 
