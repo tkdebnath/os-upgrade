@@ -1,0 +1,45 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: swim-backend
+    volumes:
+      - ./db.sqlite3:/app/db.sqlite3
+      - ./logs:/app/logs
+      - ./media:/app/media
+      - ./static:/app/static
+    environment:
+      - DJANGO_SETTINGS_MODULE=swim_backend.settings
+      - DEBUG=True
+      - ALLOWED_HOSTS=*
+    ports:
+      - "8000:8000"
+    networks:
+      - swim-network
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./ui
+      dockerfile: Dockerfile
+    container_name: swim-frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - swim-network
+    restart: unless-stopped
+
+networks:
+  swim-network:
+    driver: bridge
+
+volumes:
+  db-data:
+  logs-data:
+  media-data:
+  static-data:
