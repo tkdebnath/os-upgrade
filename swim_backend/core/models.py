@@ -93,7 +93,7 @@ class Job(models.Model):
     image = models.ForeignKey(Image, on_delete=models.SET_NULL, null=True, blank=True)
     file_server = models.ForeignKey(FileServer, on_delete=models.SET_NULL, null=True, blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
-    task_name = models.CharField(max_length=100, default='Upgrade-Task')
+    task_name = models.CharField(max_length=100, default='Distribution-Task')
     
     # Workflow Scheduling
     workflow = models.ForeignKey(Workflow, on_delete=models.SET_NULL, null=True, blank=True)
@@ -197,3 +197,19 @@ class ActivityLog(models.Model):
     def __str__(self):
         user_name = self.user.username if self.user else 'Unknown'
         return f"{user_name} - {self.action} - {self.object_repr or 'N/A'} - {self.timestamp.strftime('%Y-%m-%d %H:%M')}"
+
+
+class DashboardProxy(models.Model):
+    """
+    Proxy model that doesn't create a database table but provides custom permissions.
+    Used to control dashboard access through Django's permission system.
+    """
+    
+    class Meta:
+        managed = False  # Don't create a database table
+        default_permissions = ()  # Don't create default add/change/delete permissions
+        permissions = [
+            ('view_dashboard', 'Can view dashboard'),
+        ]
+        verbose_name = 'Dashboard'
+        verbose_name_plural = 'Dashboard'

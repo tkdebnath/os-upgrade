@@ -1,6 +1,7 @@
 from rest_framework import viewsets, serializers
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework.permissions import IsAdminUser
 from .models import Device, Site, DeviceModel, Region, GlobalCredential
 import csv
 import io
@@ -34,6 +35,17 @@ class GlobalCredentialSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 class GlobalCredentialViewSet(viewsets.ViewSet):
+    
+    def get_permissions(self):
+        """Only superusers can access global credentials"""
+        from rest_framework.permissions import BasePermission
+        
+        class IsSuperUser(BasePermission):
+            def has_permission(self, request, view):
+                return request.user and request.user.is_authenticated and request.user.is_superuser
+        
+        return [IsSuperUser()]
+    
     def list(self, request):
         obj, _ = GlobalCredential.objects.get_or_create(id=1, defaults={'username': 'admin', 'password': 'password'})
         serializer = GlobalCredentialSerializer(obj)
@@ -84,6 +96,10 @@ class DeviceSerializer(serializers.ModelSerializer):
         allow_null=True
     )
     
+    # Add ID fields for frontend routing
+    site_id = serializers.IntegerField(source='site.id', read_only=True, allow_null=True)
+    model_id = serializers.IntegerField(source='model.id', read_only=True, allow_null=True)
+    
     compliance_status = serializers.SerializerMethodField()
     golden_image = serializers.SerializerMethodField()
 
@@ -92,14 +108,53 @@ class DeviceSerializer(serializers.ModelSerializer):
         fields = '__all__'
         
     def get_compliance_status(self, obj):
-        if not obj.model or not obj.model.golden_image_version:
+        if not obj.model:
             return 'No Standard'
         
-        # Simple string comparison
-        # In reality, might need semantic versioning
-        if obj.version == obj.model.golden_image_version:
-            return 'Compliant'
-        return 'Non-Compliant'
+        # Get golden version from either the new default_image or old golden_image_version field
+        golden_version = None
+        if obj.model.default_image:
+            golden_version = obj.model.default_image.version
+        elif obj.model.golden_image_version:
+            golden_version = obj.model.golden_image_version
+        
+        if not golden_version:
+            return 'No Standard'
+        
+        # Version comparison to match dashboard logic
+        def compare_versions(v1, v2):
+            """Returns: -1 (v1 < v2), 0 (equal), 1 (v1 > v2), None (error)"""
+            if not v1 or not v2:
+                return None
+            try:
+                p1 = str(v1).replace('-', '.').split('.')
+                p2 = str(v2).replace('-', '.').split('.')
+                for i in range(max(len(p1), len(p2))):
+                    val1 = p1[i] if i < len(p1) else '0'
+                    val2 = p2[i] if i < len(p2) else '0'
+                    try:
+                        n1 = int(''.join(filter(str.isdigit, val1)) or '0')
+                        n2 = int(''.join(filter(str.isdigit, val2)) or '0')
+                        if n1 > n2:
+                            return 1
+                        elif n1 < n2:
+                            return -1
+                    except ValueError:
+                        if val1 > val2:
+                            return 1
+                        elif val1 < val2:
+                            return -1
+                return 0
+            except:
+                return None
+        
+        comparison = compare_versions(obj.version, golden_version)
+        if comparison is None or comparison < 0:
+            return 'Non-Compliant'  # Outdated or unparseable
+        elif comparison == 0:
+            return 'Compliant'  # Up to Date
+        else:  # comparison > 0
+            return 'Ahead'  # Newer than golden
         
     def get_golden_image(self, obj):
         if not obj.model:
@@ -148,9 +203,8 @@ class DeviceSerializer(serializers.ModelSerializer):
 
 class DeviceModelViewSet(viewsets.ModelViewSet):
     serializer_class = DeviceModelSerializer
-    lookup_field = 'name'
-    lookup_value_regex = '[^/]+'
-    permission_classes = []  # Allow all authenticated users (covered by global setting)
+    # Removed lookup_field to use default 'pk' (ID-based lookups)
+    # lookup_value_regex removed as it's no longer needed
 
     def get_queryset(self):
         from django.db.models import Count
@@ -243,6 +297,13 @@ class DeviceViewSet(viewsets.ModelViewSet):
         Trigger sync (version discovery) for devices.
         Scope: 'all', 'site', 'selection' (list of IDs).
         """
+        # Check permission
+        if not request.user.has_perm('devices.sync_device_inventory'):
+            return Response(
+                {'error': 'You do not have permission to sync device inventory'},
+                status=403
+            )
+        
         scope_type = request.data.get('scope', 'selection')
         scope_value = request.data.get('ids', [])
         
@@ -258,6 +319,13 @@ class DeviceViewSet(viewsets.ModelViewSet):
         Runs pre-upgrade checks on a list of devices.
         Checks: Reachability, Compliance, config-register, flash space.
         """
+        # Check permission
+        if not request.user.has_perm('devices.check_device_readiness'):
+            return Response(
+                {'error': 'You do not have permission to check device readiness'},
+                status=403
+            )
+        
         from swim_backend.core.readiness import check_readiness
         from swim_backend.images.models import Image
         
@@ -296,22 +364,27 @@ class DeviceViewSet(viewsets.ModelViewSet):
                     pass  # Fall through to golden image
             
             # Fall back to golden image if no selection or selected image not found
-            if not target_size and dev.model and dev.model.golden_image_version:
-                golden_version = dev.model.golden_image_version
-                target_image_file = dev.model.golden_image_file
-                if dev.model:
-                     # 1. Prefer Explicit Size from Standard
-                     if dev.model.golden_image_size:
-                         target_size = dev.model.golden_image_size
-                     
-                     # 2. Fallback to Image Object Size
-                     elif dev.model.golden_image_file:
-                         img = Image.objects.filter(filename=dev.model.golden_image_file).first()
-                         if img:
-                             target_size = img.size_bytes
-                         else:
-                             # Default fallback if image record missing but file defined (e.g. 500MB)
-                             target_size = 500 * 1024 * 1024 
+            if not target_size and dev.model:
+                # First check new default_image FK (set via UI)
+                if dev.model.default_image:
+                    golden_version = dev.model.default_image.version
+                    target_image_file = dev.model.default_image.filename
+                    target_size = dev.model.default_image.size_bytes
+                # Fall back to old golden_image fields
+                elif dev.model.golden_image_version:
+                    golden_version = dev.model.golden_image_version
+                    target_image_file = dev.model.golden_image_file
+                    # 1. Prefer Explicit Size from Standard
+                    if dev.model.golden_image_size:
+                        target_size = dev.model.golden_image_size
+                    # 2. Fallback to Image Object Size
+                    elif dev.model.golden_image_file:
+                        img = Image.objects.filter(filename=dev.model.golden_image_file).first()
+                        if img:
+                            target_size = img.size_bytes
+                        else:
+                            # Default fallback if image record missing but file defined (e.g. 500MB)
+                            target_size = 500 * 1024 * 1024 
 
             # 2. Run Real Checks
             # Use a consistent session key for logs
@@ -385,6 +458,13 @@ class DeviceViewSet(viewsets.ModelViewSet):
         """
         Initiates image distribution job using the SELECTED WORKFLOW.
         """
+        # Check permission
+        if not request.user.has_perm('devices.upgrade_device_firmware'):
+            return Response(
+                {'error': 'You do not have permission to upgrade device firmware'},
+                status=403
+            )
+        
         device_ids = request.data.get('ids', [])
         workflow_id = request.data.get('workflow_id') # Get from frontend
         created_jobs = []
@@ -539,6 +619,13 @@ class DeviceViewSet(viewsets.ModelViewSet):
         """
         Initiates image activation job with checks.
         """
+        # Check permission
+        if not request.user.has_perm('devices.upgrade_device_firmware'):
+            return Response(
+                {'error': 'You do not have permission to upgrade device firmware'},
+                status=403
+            )
+        
         import threading
         import uuid
         from swim_backend.core.models import Job, ValidationCheck, Workflow
@@ -598,17 +685,6 @@ class DeviceViewSet(viewsets.ModelViewSet):
                 'config': {},
                 'status': 'pending'
             })
-        else:
-            # Ensure Activation exists in the plan?
-            has_activation = any(s['step_type'] == 'activation' for s in execution_plan)
-            
-            if not has_activation:
-                execution_plan.append({
-                    'name': 'Software Activation',
-                    'step_type': 'activation',
-                    'config': {},
-                    'status': 'pending'
-                })
 
         # Helper to create job
         def create_activation_job(dev_id, mode, is_scheduled_active):

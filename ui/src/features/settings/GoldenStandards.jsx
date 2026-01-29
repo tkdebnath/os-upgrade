@@ -21,8 +21,8 @@ const GoldenStandards = () => {
     const fetchData = async () => {
         try {
             const [modelsRes, serversRes] = await Promise.all([
-                axios.get('/api/device-models/'),
-                axios.get('/api/file-servers/')
+                axios.get('/api/dcim/device-models/'),
+                axios.get('/api/images/file-servers/')
             ]);
             setModels(modelsRes.data.results || modelsRes.data);
             setFileServers(serversRes.data.results || serversRes.data);
@@ -43,7 +43,7 @@ const GoldenStandards = () => {
                 setConfirmModalData(null);
                 setCleaning(true);
                 try {
-                    const res = await axios.delete('/api/device-models/cleanup_unused/');
+                    const res = await axios.delete('/api/dcim/device-models/cleanup_unused/');
                     if (res.data.status === 'success') {
                         // alert(res.data.message); // Optional: Use toast or let UI refresh show it
                         fetchData(); // Refresh list
@@ -68,7 +68,7 @@ const GoldenStandards = () => {
         }
         setScanning(model.id);
         try {
-            const res = await axios.get(`/api/device-models/${model.name}/scan_images/`, {
+            const res = await axios.get(`/api/dcim/device-models/${model.name}/scan_images/`, {
                 params: {
                     path: model.golden_image_path,
                     server: model.default_file_server
@@ -99,7 +99,7 @@ const GoldenStandards = () => {
 
         setSaving(model.id);
         try {
-            await axios.patch(`/api/device-models/${model.name}/`, {
+            await axios.patch(`/api/dcim/device-models/${model.name}/`, {
                 golden_image_version: model.golden_image_version,
                 golden_image_file: model.golden_image_file,
                 golden_image_path: model.golden_image_path,

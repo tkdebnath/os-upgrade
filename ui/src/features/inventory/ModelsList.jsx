@@ -24,7 +24,7 @@ const ModelsList = () => {
         try {
             setError(null);
             console.log('[ModelsList] Fetching models from API...');
-            const res = await api.get('/api/device-models/');
+            const res = await api.get('/api/dcim/device-models/');
             console.log('[ModelsList] API Response:', res.data);
             const modelsData = res.data.results || res.data;
             console.log('[ModelsList] Setting models:', modelsData);
@@ -79,7 +79,7 @@ const ModelsList = () => {
                     await Promise.all(
                         Array.from(selectedModels).map(modelId => {
                             const model = models.find(m => m.id === modelId);
-                            return api.delete(`/api/device-models/${model.name}/`);
+                            return api.delete(`/api/dcim/device-models/${model.name}/`);
                         })
                     );
                     setSelectedModels(new Set());
@@ -188,7 +188,7 @@ const ModelsList = () => {
                                         </td>
                                         <td className="p-4">
                                             <Link 
-                                                to={`/models/${model.name}`}
+                                                to={`/models/${model.id}`}
                                                 className="font-semibold text-blue-600 hover:text-blue-800 flex items-center group"
                                             >
                                                 <Server size={16} className="mr-2 text-gray-400" />
@@ -233,7 +233,7 @@ const ModelsList = () => {
                                         </td>
                                         <td className="p-4 text-right">
                                             <Link
-                                                to={`/models/${model.name}`}
+                                                to={`/models/${model.id}`}
                                                 className="text-blue-600 hover:text-blue-800 text-xs font-semibold"
                                             >
                                                 View Details →

@@ -25,7 +25,7 @@ const ScheduledJobs = () => {
 
     const fetchScheduledJobs = async () => {
         try {
-            const res = await axios.get('/api/jobs/', {
+            const res = await axios.get('/api/core/jobs/', {
                 params: {
                     status: 'scheduled',
                     search: search
@@ -51,13 +51,13 @@ const ScheduledJobs = () => {
         try {
             if (jobIdToCancel) {
                 // Single Cancel
-                await axios.post(`/api/jobs/${jobIdToCancel}/cancel/`);
+                await axios.post(`/api/core/jobs/${jobIdToCancel}/cancel/`);
             } else {
                 // Bulk Cancel using same endpoint iteration, or simpler logic.
                 // Since we don't have a specific bulk cancel endpoint yet (except maybe abusing bulk_reschedule with status?),
                 // let's iterate for now or use the job cancel endpoint loop.
                 // BETTER: Use Promise.all
-                const promises = selectedJobIds.map(id => axios.post(`/api/jobs/${id}/cancel/`));
+                const promises = selectedJobIds.map(id => axios.post(`/api/core/jobs/${id}/cancel/`));
                 await Promise.all(promises);
                 setSelectedJobIds([]);
             }
@@ -73,7 +73,7 @@ const ScheduledJobs = () => {
     const handleReschedule = async () => {
         if (!newScheduleTime) return alert("Please select a time");
         try {
-            await axios.post('/api/jobs/bulk_reschedule/', {
+            await axios.post('/api/core/jobs/bulk_reschedule/', {
                 ids: selectedJobIds,
                 distribution_time: newScheduleTime
             });

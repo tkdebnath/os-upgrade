@@ -50,7 +50,9 @@ const Layout = () => {
 
                 <nav className="flex-1 px-4 py-6 space-y-2">
                     <p className="px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Main Menu</p>
-                    <SidebarItem to="/" icon={LayoutDashboard} label="Dashboard" />
+                    {(can('core.view_dashboard') || user.is_superuser) && (
+                        <SidebarItem to="/" icon={LayoutDashboard} label="Dashboard" />
+                    )}
 
                     {(can('devices.view_device') || user.is_superuser) && (
                         <>
@@ -81,12 +83,16 @@ const Layout = () => {
                             <SidebarItem to="/admin" icon={UserCog} label="Admin Panel" />
                         )}
                         <SidebarItem to="/profile" icon={User} label="My Profile" />
-                        <SidebarItem to="/settings" icon={Settings} label="Settings" />
-                        <div className="pl-12 text-gray-400 text-sm space-y-2 mt-1">
-                            <Link to="/standards" className="block hover:text-white">• Golden Standards</Link>
-                            <Link to="/settings/validation" className="block hover:text-white">• Validation Checks</Link>
-                            <Link to="/workflows" className="block hover:text-white">• Workflows</Link>
-                        </div>
+                        {user.is_superuser && (
+                            <>
+                                <SidebarItem to="/settings" icon={Settings} label="Settings" />
+                                <div className="pl-12 text-gray-400 text-sm space-y-2 mt-1">
+                                    <Link to="/standards" className="block hover:text-white">• Golden Standards</Link>
+                                    <Link to="/settings/validation" className="block hover:text-white">• Validation Checks</Link>
+                                    <Link to="/workflows" className="block hover:text-white">• Workflows</Link>
+                                </div>
+                            </>
+                        )}
                     </div>
                 </nav>
             </aside>

@@ -23,8 +23,6 @@ class PreCheckStep(BaseStep):
                 
                 failures = 0
                 for check in all_checks:
-                    self.log(f"Running Pre-Check: {check.name} ({check.get_category_display()})...")
-                    
                     # Create detailed record
                     check_run = CheckRun.objects.create(
                         device=device,
@@ -47,7 +45,7 @@ class PreCheckStep(BaseStep):
                     status = "success" if success else "failed"
                     
                     check_run.status = status
-                    check_run.output = msg
+                    check_run.output = f"precheck:{log_dir}:{check.name}:{check.category}:{check.command}"
                     check_run.save()
                     
                     self.log(f"Pre-Check {check.name}: {status}")

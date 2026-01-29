@@ -2,9 +2,17 @@ import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import axios from 'axios';
 import { ArrowLeft, Server, AlertCircle, CheckCircle, Upload, Trash, Star, HardDrive, Plus, X, Edit2 } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
 
 const ModelDetail = () => {
-    const { id } = useParams(); // id is the model name
+    const { id } = useParams(); // id is the model ID (numeric)
+    const { user } = useAuth();
+    
+    // Permission check helper
+    const can = (perm) => {
+        if (!user) return false;
+        return user.is_superuser || (user.permissions && user.permissions.includes(perm));
+    };
     const [model, setModel] = useState(null);
     const [devices, setDevices] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -39,8 +47,8 @@ const ModelDetail = () => {
     const fetchData = async () => {
         try {
             const [modelRes, devRes] = await Promise.all([
-                axios.get(`/api/device-models/${id}/`).catch(e => null), // Graceful fail if not exist yet
-                axios.get('/api/devices/')
+                axios.get(`/api/dcim/device-models/${id}/`).catch(e => null), // Graceful fail if not exist yet
+                axios.get('/api/dcim/devices/')
             ]);
 
             if (modelRes && modelRes.data) {
@@ -49,7 +57,7 @@ const ModelDetail = () => {
             }
 
             const allDevices = devRes.data.results || devRes.data;
-            const modelDevices = allDevices.filter(d => d.model === id);
+            const modelDevices = allDevices.filter(d => d.model_id === parseInt(id));
             setDevices(modelDevices);
         } catch (error) {
             console.error("Failed to fetch data", error);
@@ -69,12 +77,12 @@ const ModelDetail = () => {
                 md5_checksum: newImage.md5_checksum,
                 // uploaded_at is auto
             };
-            const imgRes = await axios.post('/api/images/', imgPayload);
+            const imgRes = await axios.post('/api/images/images/', imgPayload);
             const imageId = imgRes.data.id;
 
             // 2. Link to Model
             if (model) {
-                await axios.patch(`/api/device-models/${model.name}/`, {
+                await axios.patch(`/api/dcim/device-models/${model.id}/`, {
                     supported_images: [...(model.supported_images || []), imageId]
                 });
             }
@@ -92,7 +100,7 @@ const ModelDetail = () => {
     const handleSetDefault = async (imageId) => {
         if (!model) return;
         try {
-            await axios.patch(`/api/device-models/${model.name}/`, {
+            await axios.patch(`/api/dcim/device-models/${model.id}/`, {
                 default_image: imageId
             });
             fetchData();
@@ -107,7 +115,7 @@ const ModelDetail = () => {
         if (!confirm("Are you sure you want to remove this image from supported list?")) return;
         try {
             const newSupported = model.supported_images.filter(id => id !== imageId);
-            await axios.patch(`/api/device-models/${model.name}/`, {
+            await axios.patch(`/api/dcim/device-models/${model.id}/`, {
                 supported_images: newSupported
             });
             fetchData();
@@ -120,7 +128,7 @@ const ModelDetail = () => {
     const handleUpdateImage = async (e) => {
         e.preventDefault();
         try {
-            await axios.patch(`/api/images/${editingImage}/`, {
+            await axios.patch(`/api/images/images/${editingImage}/`, {
                 version: editForm.version,
                 filename: editForm.filename,
                 size_bytes: parseInt(editForm.size_bytes),
@@ -148,7 +156,7 @@ const ModelDetail = () => {
     const handleUpdatePath = async () => {
         if (!model) return;
         try {
-            await axios.patch(`/api/device-models/${model.name}/`, {
+            await axios.patch(`/api/dcim/device-models/${model.id}/`, {
                 golden_image_path: scanPath
             });
             setIsEditingPath(false);
@@ -169,7 +177,7 @@ const ModelDetail = () => {
                     <ArrowLeft size={20} />
                 </Link>
                 <div>
-                    <h1 className="text-2xl font-bold text-gray-800">{id}</h1>
+                    <h1 className="text-2xl font-bold text-gray-800">{model?.name || 'Loading...'}</h1>
                     <p className="text-sm text-gray-500 flex items-center space-x-4">
                         <span className="flex items-center"><Server size={14} className="mr-1" /> {model?.vendor || 'Cisco'}</span>
                         <span className="flex items-center"><HardDrive size={14} className="mr-1" /> {devices.length} Devices</span>
@@ -201,7 +209,7 @@ const ModelDetail = () => {
                         <div className="flex justify-between items-center mb-2">
                             <h3 className="text-xs font-bold text-gray-500 uppercase">Image Scan Settings</h3>
                             {!isEditingPath ? (
-                                <button onClick={() => setIsEditingPath(true)} className="text-blue-600 text-xs font-semibold hover:underline">Edit</button>
+                                can('devices.change_devicemodel') && <button onClick={() => setIsEditingPath(true)} className="text-blue-600 text-xs font-semibold hover:underline">Edit</button>
                             ) : (
                                 <div className="flex space-x-2">
                                     <button onClick={handleUpdatePath} className="text-green-600 text-xs font-bold hover:underline">Save</button>
@@ -266,12 +274,14 @@ const ModelDetail = () => {
                     <div className="bg-white rounded border border-gray-200 shadow-sm">
                         <div className="p-4 border-b border-gray-200 flex justify-between items-center bg-gray-50">
                             <h3 className="font-bold text-gray-700">Supported Images</h3>
-                            <button
-                                onClick={() => setShowAddForm(true)}
-                                className="flex items-center px-3 py-1.5 bg-blue-600 text-white rounded text-xs font-bold hover:bg-blue-700"
-                            >
-                                <Plus size={14} className="mr-1" /> Add New Image
-                            </button>
+                            {can('images.add_image') && (
+                                <button
+                                    onClick={() => setShowAddForm(true)}
+                                    className="flex items-center px-3 py-1.5 bg-blue-600 text-white rounded text-xs font-bold hover:bg-blue-700"
+                                >
+                                    <Plus size={14} className="mr-1" /> Add New Image
+                                </button>
+                            )}
                         </div>
 
                         {/* Inline Add Form */}
@@ -412,14 +422,16 @@ const ModelDetail = () => {
                                                     <td className="p-3 text-gray-500">{img.size_bytes > 0 ? (img.size_bytes / (1024 * 1024)).toFixed(2) + ' MB' : 'N/A'}</td>
                                                     <td className="p-3 text-gray-400 font-mono text-xs truncate max-w-xs" title={img.md5_checksum}>{img.md5_checksum || 'N/A'}</td>
                                                     <td className="p-3 text-right flex justify-end space-x-2">
-                                                        <button
-                                                            onClick={() => startEditImage(img)}
-                                                            className="text-blue-600 hover:text-blue-700"
-                                                            title="Edit Image"
-                                                        >
-                                                            <Edit2 size={14} />
-                                                        </button>
-                                                        {model.default_image !== img.id && (
+                                                        {can('images.change_image') && (
+                                                            <button
+                                                                onClick={() => startEditImage(img)}
+                                                                className="text-blue-600 hover:text-blue-700"
+                                                                title="Edit Image"
+                                                            >
+                                                                <Edit2 size={14} />
+                                                            </button>
+                                                        )}
+                                                        {can('devices.change_devicemodel') && model.default_image !== img.id && (
                                                             <button
                                                                 onClick={() => handleSetDefault(img.id)}
                                                                 className="text-yellow-600 hover:text-yellow-700 text-xs font-semibold flex items-center"
@@ -428,13 +440,15 @@ const ModelDetail = () => {
                                                                 <Star size={14} className="mr-1" /> Make Golden
                                                             </button>
                                                         )}
-                                                        <button
-                                                            onClick={() => handleRemoveSupported(img.id)}
-                                                            className="text-red-400 hover:text-red-600"
-                                                            title="Remove"
-                                                        >
-                                                            <Trash size={14} />
-                                                        </button>
+                                                        {can('images.delete_image') && (
+                                                            <button
+                                                                onClick={() => handleRemoveSupported(img.id)}
+                                                                className="text-red-400 hover:text-red-600"
+                                                                title="Remove"
+                                                            >
+                                                                <Trash size={14} />
+                                                            </button>
+                                                        )}
                                                     </td>
                                                 </tr>
                                             )}

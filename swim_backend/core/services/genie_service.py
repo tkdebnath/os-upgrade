@@ -117,7 +117,17 @@ def run_check_operation(device_obj, check_type, command, check_name, phase, outp
                  except TypeError:
                      # Fallback if specific learn doesn't support timeout
                      learned = device_obj.learn(command)
-                 output = str(learned)
+                 
+                 # Properly serialize Genie object to JSON
+                 import json
+                 if hasattr(learned, 'to_dict'):
+                     output = json.dumps(learned.to_dict(), indent=2, default=str)
+                 elif hasattr(learned, 'info'):
+                     output = json.dumps(learned.info, indent=2, default=str)
+                 else:
+                     # Fallback to pretty-printed dict representation
+                     import pprint
+                     output = pprint.pformat(dict(learned), width=120)
         else:
              # Default to Command Execution (category='command' or 'script')
              output = device_obj.execute(command, timeout=timeout)

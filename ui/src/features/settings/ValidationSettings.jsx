@@ -20,7 +20,7 @@ const ValidationSettings = () => {
 
     const fetchChecks = async () => {
         try {
-            const res = await axios.get('/api/checks/');
+            const res = await axios.get('/api/core/checks/');
             setChecks(res.data.results || res.data);
         } catch (error) {
             console.error("Failed to fetch checks", error);
@@ -33,7 +33,7 @@ const ValidationSettings = () => {
         // Simple direct delete without native confirm to avoid browser blocking issues
         // In production use a custom modal
         try {
-            await axios.delete(`/api/checks/${id}/`);
+            await axios.delete(`/api/core/checks/${id}/`);
             setChecks(checks.filter(c => c.id !== id));
         } catch (error) {
             console.error("Delete failed", error);
@@ -45,7 +45,7 @@ const ValidationSettings = () => {
         e.preventDefault();
         setAdding(true);
         try {
-            const res = await axios.post('/api/checks/', {
+            const res = await axios.post('/api/core/checks/', {
                 name: newName,
                 description: newDesc,
                 command: newCommand,
@@ -94,7 +94,7 @@ const ValidationSettings = () => {
             const name = genieModule.trim();
             const command = name.toLowerCase(); // User requested removing 'learn' prefix
 
-            const res = await axios.post('/api/checks/', {
+            const res = await axios.post('/api/core/checks/', {
                 name: name, // Just the input, e.g. "Ospf"
                 description: newDesc || `Validates ${name} state`,
                 command: command, // Still needs to be a valid pyATS command

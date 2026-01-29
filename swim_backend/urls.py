@@ -3,14 +3,13 @@ from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
 
-from swim_backend.api_router import router
-
 def dashboard_callback(request, context):
     from django.contrib.admin.models import LogEntry
     context['log_entries'] = LogEntry.objects.select_related('content_type', 'user')[:10]
     return context
 
 from rest_framework.schemas import get_schema_view
+from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, SpectacularSwaggerView
 
 from swim_backend.core.parity_views import SwimParityView
 
@@ -20,6 +19,11 @@ swim_view = SwimParityView()
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/', include('swim_backend.api_router')),
+    
+    # --- API Documentation (OpenAPI/Swagger) ---
+    path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
+    path('api/schema/swagger-ui/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
+    path('api/schema/redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),
     
     # --- SWIM API Parity (Cisco DNA Center Style) ---
     path('image/importation', swim_view.get_images),

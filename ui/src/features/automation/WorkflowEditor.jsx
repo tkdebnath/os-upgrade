@@ -30,7 +30,7 @@ const WorkflowEditor = () => {
 
     const fetchWorkflows = async () => {
         try {
-            const res = await axios.get('/api/workflows/');
+            const res = await axios.get('/api/core/workflows/');
             const data = res.data.results || res.data; // Handle pagination
             setWorkflows(data);
             if (data.length > 0 && !selectedWorkflow) {
@@ -106,7 +106,7 @@ const WorkflowEditor = () => {
                 config: s.config
             }));
 
-            await axios.post(`/api/workflows/${selectedWorkflow.id}/update_steps/`, payload);
+            await axios.post(`/api/core/workflows/${selectedWorkflow.id}/update_steps/`, payload);
             await fetchWorkflows(); // Refresh
             setConfirmModalData({
                 title: "Success",
@@ -147,7 +147,7 @@ const WorkflowEditor = () => {
             ];
 
             // Create workflow
-            const res = await axios.post('/api/workflows/', { name: newWorkflowName, description: 'Custom workflow' });
+            const res = await axios.post('/api/core/workflows/', { name: newWorkflowName, description: 'Custom workflow' });
 
             // Immediately add mandatory steps
             // Note: The API 'create' might return an empty workflow. We need to save the steps.
@@ -160,10 +160,10 @@ const WorkflowEditor = () => {
             // Solution: We must push these steps to backend immediately or frontend must handle "New Empty = Default Steps" logic.
             // Let's UPDATE the workflow with mandatory steps right away.
             const newWf = res.data;
-            await axios.post(`/api/workflows/${newWf.id}/update_steps/`, initialSteps);
+            await axios.post(`/api/core/workflows/${newWf.id}/update_steps/`, initialSteps);
 
             // Re-fetch to get clean state
-            const updatedRes = await axios.get('/api/workflows/'); // or fetch individual
+            const updatedRes = await axios.get('/api/core/workflows/'); // or fetch individual
             const updatedWfs = updatedRes.data.results || updatedRes.data;
             const freshWf = updatedWfs.find(w => w.id === newWf.id);
 
@@ -229,7 +229,7 @@ const WorkflowEditor = () => {
                                                 <button
                                                     onClick={async () => {
                                                         try {
-                                                            await axios.delete(`/api/workflows/${selectedWorkflow.id}/`);
+                                                            await axios.delete(`/api/core/workflows/${selectedWorkflow.id}/`);
                                                             await fetchWorkflows(); // Refresh
                                                             setSelectedWorkflow(null); // Reset
                                                             alert("Workflow deleted.");
@@ -262,7 +262,7 @@ const WorkflowEditor = () => {
                                         <button
                                             onClick={async () => {
                                                 try {
-                                                    await axios.post(`/api/workflows/${selectedWorkflow.id}/set_default/`);
+                                                    await axios.post(`/api/core/workflows/${selectedWorkflow.id}/set_default/`);
                                                     await fetchWorkflows();
                                                     setWorkflows(prev => prev.map(w => ({ ...w, is_default: w.id === selectedWorkflow.id })));
                                                     setSelectedWorkflow({ ...selectedWorkflow, is_default: true });

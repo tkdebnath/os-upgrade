@@ -21,9 +21,9 @@ const NetBoxWizard = ({ onClose, onImportComplete, onBack }) => {
         setLoading(true);
         setError(null);
         try {
-            const res = await axios.post('/api/devices/plugin/netbox/action/', { action: 'connect', config });
+            const res = await axios.post('/api/dcim/devices/plugin/netbox/action/', { action: 'connect', config });
             // Fetch metadata immediately after connect for this wizard flow
-            const metaRes = await axios.post('/api/devices/plugin/netbox/action/', { action: 'metadata', config });
+            const metaRes = await axios.post('/api/dcim/devices/plugin/netbox/action/', { action: 'metadata', config });
             setMeta(metaRes.data);
             setStep(2);
         } catch (error) {
@@ -38,7 +38,7 @@ const NetBoxWizard = ({ onClose, onImportComplete, onBack }) => {
         setLoading(true);
         setError(null);
         try {
-            const res = await axios.post('/api/devices/plugin/netbox/action/', {
+            const res = await axios.post('/api/dcim/devices/plugin/netbox/action/', {
                 action: 'preview',
                 config,
                 filters
@@ -58,7 +58,7 @@ const NetBoxWizard = ({ onClose, onImportComplete, onBack }) => {
         setLoading(true);
         setError(null);
         try {
-            const res = await axios.post('/api/devices/plugin/netbox/action/', {
+            const res = await axios.post('/api/dcim/devices/plugin/netbox/action/', {
                 action: 'import',
                 devices: toImport,
                 defaults: creds

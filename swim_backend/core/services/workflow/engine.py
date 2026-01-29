@@ -18,6 +18,7 @@ class WorkflowEngine:
         from .steps.activation import ActivationStep
         from .steps.postchecks import PostCheckStep
         from .steps.ping import PingStep
+        from .steps.wait import WaitStep
         
         MAPPING = {
             'readiness': ReadinessStep,
@@ -26,6 +27,7 @@ class WorkflowEngine:
             'activation': ActivationStep,
             'postcheck': PostCheckStep,
             'ping': PingStep,
+            'wait': WaitStep,
             # 'custom': CustomStep
         }
         return MAPPING.get(step_type)
@@ -102,6 +104,13 @@ class WorkflowEngine:
                 if not StepClass:
                     log_update(self.job_id, f"Unknown step type: {step_model.step_type}. Skipping.")
                     continue
+                
+                # Log step start with visual separator
+                log_update(self.job_id, "")
+                log_update(self.job_id, "="*80)
+                log_update(self.job_id, f"▶ STARTING STEP: {step_model.name}")
+                log_update(self.job_id, "="*80)
+                log_update(self.job_id, "")
                     
                 # Initialize Step
                 step_instance = StepClass(self.job_id, step_model.config)
@@ -115,6 +124,13 @@ class WorkflowEngine:
                     continue
 
                 status, msg = step_instance.execute()
+                
+                # Log step completion with visual separator
+                log_update(self.job_id, "")
+                log_update(self.job_id, "-"*80)
+                log_update(self.job_id, f"✓ COMPLETED STEP: {step_model.name} ({status.upper()})")
+                log_update(self.job_id, "-"*80)
+                log_update(self.job_id, "")
                 
                 self.update_job_step(job, step_model.name, status)
                 
@@ -130,14 +146,22 @@ class WorkflowEngine:
             except Exception as e:
                 logger.error(f"Error in step {step_model.name}: {e}\n{traceback.format_exc()}")
                 log_update(self.job_id, f"Critical Error in {step_model.name}: {e}")
+                log_update(self.job_id, "")
+                log_update(self.job_id, "-"*80)
+                log_update(self.job_id, f"✗ FAILED STEP: {step_model.name}")
+                log_update(self.job_id, "-"*80)
+                log_update(self.job_id, "")
                 self.update_job_step(job, step_model.name, "failed")
                 job.status = 'failed'
                 job.save(update_fields=['status'])
                 return
 
         # If we got here, workflow is done
+        log_update(self.job_id, "")
+        log_update(self.job_id, "="*80)
+        log_update(self.job_id, "🎉 WORKFLOW COMPLETED SUCCESSFULLY")
+        log_update(self.job_id, "="*80)
         job.status = 'success' # Or partial?
-        log_update(self.job_id, "Workflow Completed Successfully.")
         job.save(update_fields=['status'])
 
     def update_job_step(self, job, step_name, status):

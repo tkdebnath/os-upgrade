@@ -22,8 +22,8 @@ const RegionSettings = () => {
         setLoading(true);
         try {
             const [regRes, fsRes] = await Promise.all([
-                axios.get('/api/regions/'),
-                axios.get('/api/file-servers/')
+                axios.get('/api/dcim/regions/'),
+                axios.get('/api/images/file-servers/')
             ]);
             setRegions(regRes.data.results || regRes.data);
             setFileServers(fsRes.data.results || fsRes.data);
@@ -57,9 +57,9 @@ const RegionSettings = () => {
             };
 
             if (editingRegion) {
-                await axios.patch(`/api/regions/${editingRegion.id}/`, payload);
+                await axios.patch(`/api/dcim/regions/${editingRegion.id}/`, payload);
             } else {
-                await axios.post('/api/regions/', payload);
+                await axios.post('/api/dcim/regions/', payload);
             }
             setShowModal(false);
             fetchData();
@@ -77,7 +77,7 @@ const RegionSettings = () => {
             isDestructive: true,
             onConfirm: async () => {
                 try {
-                    await axios.delete(`/api/regions/${id}/`);
+                    await axios.delete(`/api/dcim/regions/${id}/`);
                     fetchData();
                 } catch (e) {
                     console.error(e);

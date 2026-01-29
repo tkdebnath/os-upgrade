@@ -15,8 +15,8 @@ const ImageRepo = () => {
         setLoading(true);
         try {
             const [fsRes, imgRes] = await Promise.all([
-                axios.get('/api/file-servers/'),
-                axios.get('/api/images/')
+                axios.get('/api/images/file-servers/'),
+                axios.get('/api/images/images/')
             ]);
             setFileServers(fsRes.data.results || fsRes.data);
             setImages(imgRes.data.results || imgRes.data);
@@ -50,10 +50,10 @@ const ImageRepo = () => {
             // 1. Unset current default
             const currentDefault = fileServers.find(fs => fs.is_global_default);
             if (currentDefault && currentDefault.id !== id) {
-                await axios.patch(`/api/file-servers/${currentDefault.id}/`, { is_global_default: false });
+                await axios.patch(`/api/images/file-servers/${currentDefault.id}/`, { is_global_default: false });
             }
             // 2. Set new default
-            await axios.patch(`/api/file-servers/${id}/`, { is_global_default: true });
+            await axios.patch(`/api/images/file-servers/${id}/`, { is_global_default: true });
 
             fetchData(); // Refresh to be sure
         } catch (error) {

@@ -3,14 +3,22 @@ import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { ArrowLeft, Server, Activity, ShieldCheck, Clock, Edit } from 'lucide-react';
 import EditDeviceModal from './EditDeviceModal';
+import { useAuth } from '../../context/AuthContext';
 
 const DeviceDetails = () => {
     const { id } = useParams();
     const navigate = useNavigate();
+    const { user } = useAuth();
     const [device, setDevice] = useState(null);
     const [loading, setLoading] = useState(true);
     const [showEditModal, setShowEditModal] = useState(false);
     const [fileServers, setFileServers] = useState([]);
+    
+    // Permission check helper
+    const can = (perm) => {
+        if (!user) return false;
+        return user.is_superuser || (user.permissions && user.permissions.includes(perm));
+    };
 
     useEffect(() => {
         fetchData();
@@ -19,8 +27,8 @@ const DeviceDetails = () => {
     const fetchData = async () => {
         try {
             const [devRes, fsRes] = await Promise.all([
-                axios.get(`/api/devices/${id}/`),
-                axios.get('/api/file-servers/')
+                axios.get(`/api/dcim/devices/${id}/`),
+                axios.get('/api/images/file-servers/')
             ]);
             setDevice(devRes.data);
             setFileServers(fsRes.data.results || fsRes.data);
@@ -68,12 +76,14 @@ const DeviceDetails = () => {
                     <span className="px-3 py-1 rounded-full text-xs font-bold bg-gray-100 text-gray-700">
                         {device.family}
                     </span>
-                    <button
-                        onClick={() => setShowEditModal(true)}
-                        className="ml-4 flex items-center px-3 py-2 bg-white border border-gray-300 rounded hover:bg-gray-50 text-sm font-semibold text-gray-700 transition"
-                    >
-                        <Edit size={14} className="mr-2" /> Edit Configuration
-                    </button>
+                    {can('devices.change_device') && (
+                        <button
+                            onClick={() => setShowEditModal(true)}
+                            className="ml-4 flex items-center px-3 py-2 bg-white border border-gray-300 rounded hover:bg-gray-50 text-sm font-semibold text-gray-700 transition"
+                        >
+                            <Edit size={14} className="mr-2" /> Edit Configuration
+                        </button>
+                    )}
                 </div>
             </div>
 
@@ -114,16 +124,30 @@ const DeviceDetails = () => {
                     <div className="space-y-3 text-sm">
                         <div className="flex justify-between border-b border-gray-50 py-2">
                             <span className="text-gray-500">Config Compliance</span>
-                            <span className="font-medium text-green-600">Compliant</span>
+                            <span className={`font-medium ${
+                                device.version && device.version !== 'Unknown' ? 'text-green-600' : 'text-gray-400'
+                            }`}>
+                                {device.version && device.version !== 'Unknown' ? 'Compliant' : 'Not Synced'}
+                            </span>
                         </div>
                         <div className="flex justify-between border-b border-gray-50 py-2">
                             <span className="text-gray-500">Image Compliance</span>
-                            <span className="font-medium text-yellow-600">Check Pending</span>
+                            <span className={`font-medium ${
+                                device.compliance_status === 'Compliant' ? 'text-green-600' :
+                                device.compliance_status === 'Ahead' ? 'text-blue-600' :
+                                device.compliance_status === 'Non-Compliant' ? 'text-red-600' :
+                                'text-gray-500'
+                            }`}>
+                                {device.compliance_status || 'No Standard'}
+                            </span>
                         </div>
                         <div className="flex justify-between border-b border-gray-50 py-2">
                             <span className="text-gray-500">Last Scan</span>
                             <span className="font-medium text-gray-900 flex items-center">
-                                <Clock size={12} className="mr-1" /> 2 hours ago
+                                <Clock size={12} className="mr-1" /> 
+                                {device.last_sync_time 
+                                    ? new Date(device.last_sync_time).toLocaleString() 
+                                    : 'Never'}
                             </span>
                         </div>
                     </div>
@@ -157,7 +181,7 @@ const DeviceJobs = ({ deviceId }) => {
         const fetchJobs = async () => {
             try {
                 // Fetch all jobs and filter client side for now, or use API filter if available
-                const res = await axios.get('/api/jobs/');
+                const res = await axios.get('/api/core/jobs/');
                 const allJobs = res.data.results || res.data;
                 const devJobs = allJobs.filter(j => j.device === parseInt(deviceId) || j.device_id === parseInt(deviceId));
                 // Sort by ID desc

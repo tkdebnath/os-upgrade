@@ -20,7 +20,7 @@ const ImportManager = ({ onImportSuccess }) => {
 
     const fetchPlugins = async () => {
         try {
-            const res = await axios.get('/api/devices/list_plugins/');
+            const res = await axios.get('/api/dcim/devices/list_plugins/');
             setPlugins(res.data);
         } catch (error) {
             console.error("Failed to fetch plugins", error);
@@ -47,7 +47,7 @@ const ImportManager = ({ onImportSuccess }) => {
         formData.append('file', csvFile);
 
         try {
-            const res = await axios.post('/api/devices/import_csv/', formData, {
+            const res = await axios.post('/api/dcim/devices/import_csv/', formData, {
                 headers: { 'Content-Type': 'multipart/form-data' }
             });
             setImportResult(res.data);

@@ -8,9 +8,11 @@ import ConfirmModal from './ConfirmModal';
 import TableConfigModal from './TableConfigModal';
 import { useSortableData } from '../../hooks/useSortableData';
 import SortableHeader from '../../components/SortableHeader';
+import { useAuth } from '../../context/AuthContext';
 
 const Devices = () => {
     const navigate = useNavigate();
+    const { user } = useAuth();
     const [devices, setDevices] = useState([]);
     const [loading, setLoading] = useState(true);
     const [focusMode, setFocusMode] = useState('Default'); // Default, Software Images
@@ -152,6 +154,12 @@ const Devices = () => {
 
     const { items: sortedDevices, requestSort, sortConfig } = useSortableData(filteredDevices);
 
+    // Permission check helper
+    const can = (perm) => {
+        if (!user) return false;
+        return user.is_superuser || (user.permissions && user.permissions.includes(perm));
+    };
+
     useEffect(() => {
         fetchDevices();
     }, []);
@@ -160,7 +168,7 @@ const Devices = () => {
         // Only show loading spinner on initial load to avoid flickering during polling
         if (devices.length === 0) setLoading(true);
         try {
-            const res = await axios.get('/api/devices/');
+            const res = await axios.get('/api/dcim/devices/');
             setDevices(res.data.results || res.data);
         } catch (error) {
             console.error(error);
@@ -208,7 +216,7 @@ const Devices = () => {
             onConfirm: async () => {
                 setConfirmModalData(null);
                 try {
-                    await axios.post('/api/devices/sync/', { scope: 'selection', ids: targets });
+                    await axios.post('/api/dcim/devices/sync/', { scope: 'selection', ids: targets });
                     // alert("Sync started! Check job history or refresh list in a few moments."); // Removed alert
                     setSelectedDevices(new Set());
                     // Trigger immediate fetch to see "In Progress"
@@ -235,7 +243,7 @@ const Devices = () => {
                 setConfirmModalData(null);
                 try {
                     // Delete one by one for now or bulk if API supports
-                    await Promise.all(Array.from(selectedDevices).map(id => axios.delete(`/api/devices/${id}/`)));
+                    await Promise.all(Array.from(selectedDevices).map(id => axios.delete(`/api/dcim/devices/${id}/`)));
                     alert("Devices deleted successfully.");
                     setSelectedDevices(new Set());
                     fetchDevices();
@@ -270,7 +278,7 @@ const Devices = () => {
                 return (
                     <td key={column.key} className="p-4 text-gray-600">
                         <Link
-                            to={`/sites/${dev.site || 'Global'}`}
+                            to={`/sites/${dev.site_id || 'Global'}`}
                             className="hover:text-blue-600 hover:underline text-left block"
                         >
                             {dev.site || 'Global'}
@@ -280,8 +288,8 @@ const Devices = () => {
             case 'model':
                 return (
                     <td key={column.key} className="p-4 text-gray-600 font-medium">
-                        {dev.model ? (
-                            <Link to={`/models/${dev.model}`} className="hover:text-blue-600 hover:underline">
+                        {dev.model_id ? (
+                            <Link to={`/models/${dev.model_id}`} className="hover:text-blue-600 hover:underline">
                                 {dev.model}
                             </Link>
                         ) : '-'}
@@ -399,9 +407,11 @@ const Devices = () => {
                     <Link to="/standards" className="text-gray-600 text-sm font-semibold hover:underline flex items-center bg-white border border-gray-200 px-3 py-2 rounded hover:bg-gray-50">
                         <CheckCircle size={16} className="mr-1 text-green-600" /> Standards
                     </Link>
-                    <button onClick={handleSync} className="text-gray-600 text-sm font-semibold hover:underline flex items-center bg-white border border-gray-200 px-3 py-2 rounded hover:bg-gray-50">
-                        <RefreshCw size={16} className="mr-1" /> Sync Inventory
-                    </button>
+                    {can('devices.sync_device_inventory') && (
+                        <button onClick={handleSync} className="text-gray-600 text-sm font-semibold hover:underline flex items-center bg-white border border-gray-200 px-3 py-2 rounded hover:bg-gray-50">
+                            <RefreshCw size={16} className="mr-1" /> Sync Inventory
+                        </button>
+                    )}
                     <button
                         onClick={() => setShowConfigModal(true)}
                         className="text-gray-600 text-sm font-semibold hover:underline flex items-center bg-white border border-gray-200 px-3 py-2 rounded hover:bg-gray-50"
@@ -409,13 +419,15 @@ const Devices = () => {
                     >
                         <Settings size={16} className="mr-1" /> Configure Table
                     </button>
-                    <ImportManager onImportSuccess={fetchDevices} />
-                    <button
-                        onClick={() => setShowAddModal(true)}
-                        className="text-blue-600 text-sm font-semibold hover:underline flex items-center bg-white border border-gray-200 px-3 py-2 rounded hover:bg-gray-50"
-                    >
-                        <Plus size={16} className="mr-1" /> Add Device
-                    </button>
+                    {can('devices.add_device') && <ImportManager onImportSuccess={fetchDevices} />}
+                    {can('devices.add_device') && (
+                        <button
+                            onClick={() => setShowAddModal(true)}
+                            className="text-blue-600 text-sm font-semibold hover:underline flex items-center bg-white border border-gray-200 px-3 py-2 rounded hover:bg-gray-50"
+                        >
+                            <Plus size={16} className="mr-1" /> Add Device
+                        </button>
+                    )}
                 </div>
             </div>
 
@@ -571,24 +583,30 @@ const Devices = () => {
                     <div className="fixed bottom-8 left-1/2 transform -translate-x-1/2 bg-white border border-gray-200 shadow-xl rounded-full px-6 py-3 flex items-center space-x-6 z-50 animate-in fade-in slide-in-from-bottom-4">
                         <span className="text-sm font-bold text-gray-700">{selectedDevices.size} selected</span>
                         <div className="h-4 w-px bg-gray-300"></div>
-                        <button
-                            onClick={() => handleSync(Array.from(selectedDevices))}
-                            className="text-sm font-medium text-gray-600 hover:text-blue-600 flex items-center"
-                        >
-                            <RefreshCw size={16} className="mr-2" /> Sync
-                        </button>
-                        <button
-                            onClick={handleUpgrade}
-                            className="text-sm font-medium text-gray-600 hover:text-blue-600 flex items-center"
-                        >
-                            <HardDrive size={16} className="mr-2" /> Upgrade
-                        </button>
-                        <button
-                            onClick={handleDelete}
-                            className="text-sm font-medium text-gray-600 hover:text-red-600 flex items-center"
-                        >
-                            <AlertCircle size={16} className="mr-2" /> Delete
-                        </button>
+                        {can('devices.sync_device_inventory') && (
+                            <button
+                                onClick={() => handleSync(Array.from(selectedDevices))}
+                                className="text-sm font-medium text-gray-600 hover:text-blue-600 flex items-center"
+                            >
+                                <RefreshCw size={16} className="mr-2" /> Sync
+                            </button>
+                        )}
+                        {can('devices.upgrade_device_firmware') && (
+                            <button
+                                onClick={handleUpgrade}
+                                className="text-sm font-medium text-gray-600 hover:text-blue-600 flex items-center"
+                            >
+                                <HardDrive size={16} className="mr-2" /> Upgrade
+                            </button>
+                        )}
+                        {can('devices.delete_device') && (
+                            <button
+                                onClick={handleDelete}
+                                className="text-sm font-medium text-gray-600 hover:text-red-600 flex items-center"
+                            >
+                                <AlertCircle size={16} className="mr-2" /> Delete
+                            </button>
+                        )}
                         <div className="h-4 w-px bg-gray-300"></div>
                         <button
                             onClick={() => setSelectedDevices(new Set())}

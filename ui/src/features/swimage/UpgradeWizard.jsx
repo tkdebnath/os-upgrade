@@ -2,10 +2,27 @@ import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { CheckCircle, AlertTriangle, ArrowRight, ArrowLeft, Loader, Server, HardDrive, Plus, ChevronDown, ChevronRight, FileCheck, XCircle, RefreshCw, Trash2, ChevronUp, FileText } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
 
 const UpgradeWizard = () => {
     const location = useLocation();
     const navigate = useNavigate();
+    const { user } = useAuth();
+    
+    // Permission check
+    const can = (perm) => {
+        if (!user) return false;
+        return user.is_superuser || (user.permissions && user.permissions.includes(perm));
+    };
+    
+    // Check permission on mount
+    useEffect(() => {
+        if (user && !can('devices.upgrade_device_firmware')) {
+            alert('You do not have permission to upgrade device firmware');
+            navigate('/devices');
+        }
+    }, [user]);
+    
     const [step, setStep] = useState(1);
     const [selectedDevices, setSelectedDevices] = useState(location.state?.selectedDevices || []); // List of IDs if passed, or we fetch details
     const [deviceDetails, setDeviceDetails] = useState([]);
@@ -54,7 +71,7 @@ const UpgradeWizard = () => {
 
     const fetchWorkflows = async () => {
         try {
-            const res = await axios.get('/api/workflows/');
+            const res = await axios.get('/api/core/workflows/');
             const data = res.data.results || res.data;
             setAvailableWorkflows(data);
             const def = data.find(w => w.is_default);
@@ -72,7 +89,7 @@ const UpgradeWizard = () => {
 
     const fetchChecks = async () => {
         try {
-            const res = await axios.get('/api/checks/');
+            const res = await axios.get('/api/core/checks/');
             setAvailableChecks(res.data.results || res.data);
             // Default config: Enable all pre/post for standard checks
             const initialConfig = {};
@@ -90,7 +107,7 @@ const UpgradeWizard = () => {
             // In a real app we might pass full objects, but let's re-fetch to be safe
             // Or use a filtered list endpoint. For now, we will mock or filter locally if we had full list context.
             // Let's assume we can fetch by IDs or just fetch all and filter (inefficient but works for Prototype)
-            const res = await axios.get('/api/devices/');
+            const res = await axios.get('/api/dcim/devices/');
             const allDevs = res.data.results || res.data;
             const targetDevs = allDevs.filter(d => selectedDevices.includes(d.id));
             setDeviceDetails(targetDevs);
@@ -104,7 +121,7 @@ const UpgradeWizard = () => {
     const runChecks = async () => {
         setChecking(true);
         try {
-            const res = await axios.post('/api/devices/check_readiness/', { 
+            const res = await axios.post('/api/dcim/devices/check_readiness/', { 
                 ids: selectedDevices,
                 image_map: imageSelection
             });
@@ -124,7 +141,7 @@ const UpgradeWizard = () => {
         if (!idsToRun) setDistributing(true); // Only set main loading state for initial run
 
         try {
-            const res = await axios.post('/api/devices/distribute_image/', {
+            const res = await axios.post('/api/dcim/devices/distribute_image/', {
                 ids: targetIds,
                 image_map: imageSelection
             });
@@ -892,7 +909,7 @@ const UpgradeWizard = () => {
                                                 post: checksConfig[id].post
                                             })).filter(c => c.pre || c.post);
 
-                                            const res = await axios.post('/api/devices/activate_image/', {
+                                            const res = await axios.post('/api/dcim/devices/activate_image/', {
                                                 ids: selectedDevices,
                                                 checks: checksPayload,
                                                 schedule_time: scheduleMode ? scheduleTime : null,
@@ -978,8 +995,8 @@ const JobList = ({ jobMap, devices, selectedIds, onToggleSelect, onRetry, onRemo
                 if (idsToFetch.length === 0) return;
 
                 // Ideally fetch specifics, but mock polling all
-                // We could POST to /api/jobs/bulk_get/ or just filter client side
-                const res = await axios.get('/api/jobs/');
+                // We could POST to /api/core/jobs/bulk_get/ or just filter client side
+                const res = await axios.get('/api/core/jobs/');
                 const allJobs = res.data.results || res.data;
 
                 const newJobsMap = {};
@@ -1165,7 +1182,7 @@ const JobSummaryTable = ({ jobIds }) => {
                 // Fetch all and filter (mock API limitation) or fetch individually
                 // Ideally API supports bulk get. 
                 // We'll simplisticly fetch list and filter client side for now as per other patterns.
-                const res = await axios.get('/api/jobs/');
+                const res = await axios.get('/api/core/jobs/');
                 const all = res.data.results || res.data;
                 const relevant = all.filter(j => jobIds.includes(j.id));
                 setJobs(relevant);

@@ -27,7 +27,7 @@ const ImageUpdateWizard = ({ selectedDevices, onClose, onSuccess }) => {
 
     const fetchChecks = async () => {
         try {
-            const res = await axios.get('/api/checks/');
+            const res = await axios.get('/api/core/checks/');
             setChecks(res.data.results || res.data);
             // Default select all
             setSelectedCheckIds((res.data.results || res.data).map(c => c.id));
@@ -38,7 +38,7 @@ const ImageUpdateWizard = ({ selectedDevices, onClose, onSuccess }) => {
 
     const fetchFileServers = async () => {
         try {
-            const res = await axios.get('/api/file-servers/');
+            const res = await axios.get('/api/images/file-servers/');
             setFileServers(res.data.results || res.data);
         } catch (error) {
             console.error("Failed to fetch file servers", error);
@@ -51,7 +51,7 @@ const ImageUpdateWizard = ({ selectedDevices, onClose, onSuccess }) => {
             // In a real app, we'd batch create jobs or create a parent 'Workflow' object
             // Here we iterate and create a job for each device
             const promises = selectedDevices.map(device => {
-                return axios.post('/api/jobs/', {
+                return axios.post('/api/core/jobs/', {
                     device: device.id,
                     image: null, // Should pick golden image automatically in backend logic or passed here
                     selected_checks: selectedCheckIds,

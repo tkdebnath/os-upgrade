@@ -25,8 +25,8 @@ const Dashboard = () => {
     const fetchAll = async () => {
         try {
             const [statsRes, jobsRes] = await Promise.all([
-                axios.get('/api/dashboard/stats/'),
-                axios.get('/api/jobs/')
+                axios.get('/api/core/dashboard/stats/'),
+                axios.get('/api/core/jobs/')
             ]);
             setStats(statsRes.data);
             setJobs(jobsRes.data);

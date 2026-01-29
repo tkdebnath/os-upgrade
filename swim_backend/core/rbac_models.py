@@ -80,17 +80,31 @@ class PermissionBundle(models.Model):
         actions = self.get_actions()
         
         for content_type in self.object_types.all():
+            # Get all permissions for this content type
+            ct_permissions = Permission.objects.filter(content_type=content_type)
+            
             for action in actions:
-                # Build codename like Django does: action_modelname
-                codename = f"{action}_{content_type.model}"
-                try:
-                    perm = Permission.objects.get(
-                        content_type=content_type,
-                        codename=codename
-                    )
-                    permissions.append(perm.id)
-                except Permission.DoesNotExist:
-                    pass
+                # Try different codename formats
+                possible_codenames = [
+                    f"{action}_{content_type.model}",  # Standard: view_device
+                    action,  # Just the action: view
+                ]
+                
+                # For models with custom permissions, try action_modelname variations
+                # e.g., dashboardproxy -> view_dashboard
+                model_name = content_type.model
+                if model_name.endswith('proxy'):
+                    # Remove 'proxy' suffix and try
+                    base_name = model_name[:-5]  # Remove 'proxy'
+                    possible_codenames.append(f"{action}_{base_name}")
+                
+                for codename in possible_codenames:
+                    try:
+                        perm = ct_permissions.get(codename=codename)
+                        permissions.append(perm.id)
+                        break  # Found it, move to next action
+                    except Permission.DoesNotExist:
+                        continue
         
         return Permission.objects.filter(id__in=permissions)
     

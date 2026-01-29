@@ -41,7 +41,7 @@ class DeviceFileDownloader:
         
         while retry_count < max_retries:
             try:
-                self.log(f"[{self._timestamp()}] Connecting to device...")
+                self.log("Connecting to device...")
                 
                 self.device = GenieDevice(
                     name=self.device_config['name'],
@@ -71,14 +71,14 @@ class DeviceFileDownloader:
                     connection_timeout=300  # 5 min timeout
                 )
                 
-                self.log(f"[{self._timestamp()}] Connection established to {self.device.name}")
+                self.log(f"Connection established to {self.device.name}")
                 return True
                 
             except Exception as e:
                 retry_count += 1
-                self.log(f"[{self._timestamp()}] Connection failed (attempt {retry_count}/{max_retries}): {e}")
+                self.log(f"Connection failed (attempt {retry_count}/{max_retries}): {e}")
                 if retry_count < max_retries:
-                    self.log(f"[{self._timestamp()}] Retrying in 10 seconds...")
+                    self.log("Retrying in 10 seconds...")
                     time.sleep(10)
         
         return False
@@ -287,12 +287,12 @@ class DeviceFileDownloader:
             bool: True if verification succeeds
         """
         if not expected_md5:
-            self.log(f"[{self._timestamp()}] Warning: No MD5 provided. Skipping verification.")
+            self.log("Warning: No MD5 provided. Skipping verification.")
             return True
             
-        self.log(f"[{self._timestamp()}] Verifying MD5 checksum...")
-        self.log(f"[{self._timestamp()}] Expected: {expected_md5}")
-        self.log(f"[{self._timestamp()}] This may take a while for large files...")
+        self.log("Verifying MD5 checksum...")
+        self.log(f"Expected: {expected_md5}")
+        self.log("This may take a while for large files...")
         
         try:
             # The verify command can take a long time for large files
@@ -307,15 +307,15 @@ class DeviceFileDownloader:
             # Typical success: "Verified (flash:filename) = <md5>"
             # Failure output contains "Submitted signature = <md5>" but NOT "Verified"
             if "Verified" in output and expected_md5 in output:
-                self.log(f"[{self._timestamp()}] MD5 Verification Successful!")
+                self.log("MD5 Verification Successful!")
                 return True
             else:
-                self.log(f"[{self._timestamp()}] MD5 Verification FAILED!")
-                self.log(f"[{self._timestamp()}] Output: {output}")
+                self.log("MD5 Verification FAILED!")
+                self.log(f"Output: {output}")
                 return False
                 
         except Exception as e:
-            self.log(f"[{self._timestamp()}] Verification error: {e}")
+            self.log(f"Verification error: {e}")
             return False
 
     def get_file_size(self, filename, destination='flash:'):

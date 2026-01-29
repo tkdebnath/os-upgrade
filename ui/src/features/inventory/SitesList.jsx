@@ -4,8 +4,15 @@ import axios from 'axios';
 import { Map, Edit2, Search, CheckSquare, Square } from 'lucide-react';
 import { useSortableData } from '../../hooks/useSortableData';
 import SortableHeader from '../../components/SortableHeader';
+import { useAuth } from '../../context/AuthContext';
 
 const SitesList = () => {
+    const { user } = useAuth();
+    const can = (perm) => {
+        if (!user) return false;
+        return user.is_superuser || (user.permissions && user.permissions.includes(perm));
+    };
+    
     const [sites, setSites] = useState([]);
     const [regions, setRegions] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -24,8 +31,8 @@ const SitesList = () => {
         setLoading(true);
         try {
             const [sitesRes, regionsRes] = await Promise.all([
-                axios.get('/api/sites/'),
-                axios.get('/api/regions/')
+                axios.get('/api/dcim/sites/'),
+                axios.get('/api/dcim/regions/')
             ]);
             setSites(sitesRes.data.results || sitesRes.data);
             setRegions(regionsRes.data.results || regionsRes.data);
@@ -57,7 +64,7 @@ const SitesList = () => {
 
         try {
             const promises = selectedSites.map(siteId =>
-                axios.patch(`/api/sites/${siteId}/`, { region: selectedRegion })
+                axios.patch(`/api/dcim/sites/${siteId}/`, { region: selectedRegion })
             );
             await Promise.all(promises);
 
@@ -95,7 +102,7 @@ const SitesList = () => {
                     <p className="text-gray-500 text-sm">Manage sites and their region assignments.</p>
                 </div>
                 <div className="flex space-x-2">
-                    {selectedSites.length > 0 && (
+                    {selectedSites.length > 0 && can('devices.change_site') && (
                         <button
                             onClick={() => setShowBulkEdit(true)}
                             className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg shadow hover:bg-blue-700 transition"

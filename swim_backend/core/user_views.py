@@ -4,6 +4,8 @@ from rest_framework import viewsets, serializers, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAdminUser
+from drf_spectacular.utils import extend_schema_field
+from typing import List
 
 class UserSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, required=False)
@@ -16,7 +18,8 @@ class UserSerializer(serializers.ModelSerializer):
                   'groups', 'group_names', 'is_active', 'is_staff', 'is_superuser', 'date_joined', 'last_login']
         read_only_fields = ['date_joined', 'last_login']
     
-    def get_group_names(self, obj):
+    @extend_schema_field(serializers.ListField(child=serializers.CharField()))
+    def get_group_names(self, obj) -> List[str]:
         return [group.name for group in obj.groups.all()]
     
     def create(self, validated_data):
@@ -94,7 +97,78 @@ class GroupSerializer(serializers.ModelSerializer):
 class UserViewSet(viewsets.ModelViewSet):
     queryset = User.objects.all().order_by('-date_joined')
     serializer_class = UserSerializer
-    permission_classes = [IsAdminUser]
+    
+    def get_permissions(self):
+        """Allow users to view/edit their own profile, admins can manage all users"""
+        from rest_framework.permissions import BasePermission
+        
+        class CanManageUser(BasePermission):
+            def has_permission(self, request, view):
+                # Must be authenticated
+                if not request.user or not request.user.is_authenticated:
+                    return False
+                
+                # Superusers can do anything
+                if request.user.is_superuser:
+                    return True
+                
+                # For list action, only superusers
+                if view.action == 'list':
+                    return False
+                    
+                # For create, only superusers
+                if view.action == 'create':
+                    return False
+                
+                # For retrieve/update/partial_update, check if it's their own profile
+                return view.action in ['retrieve', 'update', 'partial_update', 'set_password']
+            
+            def has_object_permission(self, request, view, obj):
+                # Superusers can do anything
+                if request.user.is_superuser:
+                    return True
+                
+                # Users can only access their own profile
+                if view.action in ['retrieve', 'update', 'partial_update', 'set_password']:
+                    return obj.id == request.user.id
+                
+                # All other actions require superuser
+                return False
+        
+        return [CanManageUser()]
+    
+    def get_queryset(self):
+        """Regular users can only see their own profile"""
+        if self.request.user.is_superuser:
+            return User.objects.all().order_by('-date_joined')
+        return User.objects.filter(id=self.request.user.id)
+    
+    def update(self, request, *args, **kwargs):
+        """Override update to restrict what regular users can modify"""
+        user = self.get_object()
+        
+        # Regular users can only update their own profile
+        if not request.user.is_superuser and user.id != request.user.id:
+            return Response(
+                {'error': 'You can only update your own profile'}, 
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # Regular users can only update specific fields
+        if not request.user.is_superuser:
+            allowed_fields = ['first_name', 'last_name', 'email']
+            restricted_fields = [f for f in request.data.keys() if f not in allowed_fields]
+            if restricted_fields:
+                return Response(
+                    {'error': f'You cannot modify these fields: {", ".join(restricted_fields)}'}, 
+                    status=status.HTTP_403_FORBIDDEN
+                )
+        
+        return super().update(request, *args, **kwargs)
+    
+    def partial_update(self, request, *args, **kwargs):
+        """Override partial_update with same restrictions"""
+        return self.update(request, *args, **kwargs)
     
     @action(detail=True, methods=['post'])
     def set_password(self, request, pk=None):

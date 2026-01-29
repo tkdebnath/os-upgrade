@@ -33,7 +33,7 @@ const Settings = () => {
     const fetchFileServers = async () => {
         setServerLoading(true);
         try {
-            const res = await axios.get('/api/file-servers/');
+            const res = await axios.get('/api/images/file-servers/');
             setFileServers(res.data.results || res.data);
         } catch (error) {
             console.error(error);
@@ -68,9 +68,9 @@ const Settings = () => {
         e.preventDefault();
         try {
             if (editingServer) {
-                await axios.put(`/api/file-servers/${editingServer.id}/`, serverForm);
+                await axios.put(`/api/images/file-servers/${editingServer.id}/`, serverForm);
             } else {
-                await axios.post('/api/file-servers/', serverForm);
+                await axios.post('/api/images/file-servers/', serverForm);
             }
             setShowServerModal(false);
             fetchFileServers();
@@ -88,7 +88,7 @@ const Settings = () => {
             isDestructive: true,
             onConfirm: async () => {
                 try {
-                    await axios.delete(`/api/file-servers/${id}/`);
+                    await axios.delete(`/api/images/file-servers/${id}/`);
                     fetchFileServers();
                 } catch (error) {
                     console.error(error);

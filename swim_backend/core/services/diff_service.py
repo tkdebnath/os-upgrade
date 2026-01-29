@@ -41,8 +41,10 @@ def generate_diffs(job, checks, log_dir):
         cli_success = False
         try:
             os.makedirs(diff_dir, exist_ok=True)
-            # Assuming 'genie' is in path. 
-            cmd = ["genie", "diff", pre_dir, post_dir, "--output", diff_dir]
+            # Use Python module invocation for genie diff
+            import sys
+            python_exec = sys.executable
+            cmd = [python_exec, "-m", "genie.cli", "diff", pre_dir, post_dir, "--output", diff_dir]
             logger.info(f"Running Genie Diff CLI: {' '.join(cmd)}")
             
             # Run command
@@ -51,6 +53,19 @@ def generate_diffs(job, checks, log_dir):
             if result.returncode == 0:
                 log_update(job.id, "Genie Diff (CLI) generated successfully.")
                 cli_success = True
+                
+                # Save the CLI summary output
+                summary_output = result.stdout if result.stdout else result.stderr
+                if summary_output:
+                    summary_file = os.path.join(log_dir, 'diff_summary.txt')
+                    with open(summary_file, 'w') as f:
+                        f.write("="*80 + "\n")
+                        f.write(f"GENIE DIFF CLI SUMMARY - Job #{job.id}\n")
+                        f.write(f"Device: {job.device.hostname}\n")
+                        f.write(f"Generated: {timezone.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                        f.write("="*80 + "\n\n")
+                        f.write(summary_output)
+                    log_update(job.id, "Genie Diff summary saved.")
             else:
                 logger.warning(f"Genie Diff CLI failed (code {result.returncode}): {result.stderr}")
         except Exception as e:
@@ -61,6 +76,18 @@ def generate_diffs(job, checks, log_dir):
 
         # Method 2: Fallback to Per-File Python Logic
         log_update(job.id, "Genie CLI diff failed or not available. Falling back to internal diff.")
+        
+        summary_lines = []
+        summary_lines.append("="*80)
+        summary_lines.append(f"DIFF SUMMARY REPORT - Job #{job.id}")
+        summary_lines.append(f"Device: {job.device.hostname}")
+        summary_lines.append(f"Generated: {timezone.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        summary_lines.append("="*80)
+        summary_lines.append("")
+        
+        changes_found = 0
+        no_changes = 0
+        errors = 0
         
         for check in checks:
             if check.category == 'genie':
@@ -107,10 +134,52 @@ def generate_diffs(job, checks, log_dir):
                     )
                     diff_content = '\n'.join(list(diff))
                 
+                # Determine if changes were found
+                has_changes = diff_content and diff_content.strip() and diff_content.strip() != f"No differences found for {check.name}."
+                
                 if not diff_content or diff_content.strip() == "":
                     diff_content = f"No differences found for {check.name}."
+                    has_changes = False
+                
+                # Update summary
+                if has_changes:
+                    status = "✓ CHANGES DETECTED"
+                    changes_found += 1
+                else:
+                    status = "○ NO CHANGES"
+                    no_changes += 1
+                    
+                summary_lines.append(f"{status:25} | {check.name}")
                     
                 with open(diff_file, 'w') as f:
                     f.write(diff_content)
                 
                 log_update(job.id, f"Generated fallback diff for {check.name}.")
+            else:
+                # Missing pre or post file
+                missing = []
+                if not os.path.exists(pre_file):
+                    missing.append("pre-check")
+                if not os.path.exists(post_file):
+                    missing.append("post-check")
+                
+                summary_lines.append(f"✗ ERROR                  | {check.name} (Missing: {', '.join(missing)})")
+                errors += 1
+        
+        # Add summary statistics
+        summary_lines.append("")
+        summary_lines.append("="*80)
+        summary_lines.append("SUMMARY STATISTICS")
+        summary_lines.append("="*80)
+        summary_lines.append(f"Total Checks:        {len(checks)}")
+        summary_lines.append(f"Changes Detected:    {changes_found}")
+        summary_lines.append(f"No Changes:          {no_changes}")
+        summary_lines.append(f"Errors:              {errors}")
+        summary_lines.append("="*80)
+        
+        # Write summary file
+        summary_file = os.path.join(log_dir, 'diff_summary.txt')
+        with open(summary_file, 'w') as f:
+            f.write('\n'.join(summary_lines))
+        
+        log_update(job.id, f"Diff summary generated: {changes_found} with changes, {no_changes} unchanged, {errors} errors.")

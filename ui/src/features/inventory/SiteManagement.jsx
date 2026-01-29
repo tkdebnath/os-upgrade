@@ -3,6 +3,7 @@ import axios from 'axios';
 import { Globe, Plus, Server, Edit2, Trash2, Map, Layout, AlertCircle } from 'lucide-react';
 import EditSiteModal from './EditSiteModal';
 import ConfirmModal from '../inventory/ConfirmModal';
+import { useAuth } from '../../context/AuthContext';
 
 // Simple Region Modal (Internal or reuse RegionSettings logic?)
 // Let's keep it self-contained for now or import shared?
@@ -10,6 +11,12 @@ import ConfirmModal from '../inventory/ConfirmModal';
 // I'll inline it for speed as it's small.
 
 const SiteManagement = () => {
+    const { user } = useAuth();
+    const can = (perm) => {
+        if (!user) return false;
+        return user.is_superuser || (user.permissions && user.permissions.includes(perm));
+    };
+    
     const [regions, setRegions] = useState([]);
     const [sites, setSites] = useState([]);
     const [fileServers, setFileServers] = useState([]);
@@ -33,9 +40,9 @@ const SiteManagement = () => {
         setLoading(true);
         try {
             const [regRes, sitesRes, fsRes] = await Promise.all([
-                axios.get('/api/regions/'),
-                axios.get('/api/sites/'),
-                axios.get('/api/file-servers/')
+                axios.get('/api/dcim/regions/'),
+                axios.get('/api/dcim/sites/'),
+                axios.get('/api/images/file-servers/')
             ]);
             setRegions(regRes.data.results || regRes.data);
             setSites(sitesRes.data.results || sitesRes.data);
@@ -73,9 +80,9 @@ const SiteManagement = () => {
                 preferred_file_server: regionForm.preferred_file_server || null
             };
             if (editingRegion) {
-                await axios.patch(`/api/regions/${editingRegion.id}/`, payload);
+                await axios.patch(`/api/dcim/regions/${editingRegion.id}/`, payload);
             } else {
-                await axios.post('/api/regions/', payload);
+                await axios.post('/api/dcim/regions/', payload);
             }
             setShowRegionModal(false);
             fetchData();
@@ -91,7 +98,7 @@ const SiteManagement = () => {
             confirmText: "Delete",
             isDestructive: true,
             onConfirm: async () => {
-                await axios.delete(`/api/regions/${id}/`);
+                await axios.delete(`/api/dcim/regions/${id}/`);
                 fetchData();
                 setConfirmModalData(null);
             }
@@ -122,12 +129,14 @@ const SiteManagement = () => {
                     </h1>
                     <p className="text-gray-500 text-sm">Organize sites into regions and manage file server preferences.</p>
                 </div>
-                <button
-                    onClick={() => openRegionModal()}
-                    className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg shadow hover:bg-blue-700 transition"
-                >
-                    <Plus size={18} className="mr-2" /> Add Region
-                </button>
+                {can('devices.add_region') && (
+                    <button
+                        onClick={() => openRegionModal()}
+                        className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg shadow hover:bg-blue-700 transition"
+                    >
+                        <Plus size={18} className="mr-2" /> Add Region
+                    </button>
+                )}
             </div>
 
             {/* Regions Grid */}
@@ -147,12 +156,16 @@ const SiteManagement = () => {
                                 </div>
                             </div>
                             <div className="flex space-x-1">
-                                <button onClick={() => openRegionModal(region)} className="p-1.5 text-gray-400 hover:text-blue-600 rounded hover:bg-white">
-                                    <Edit2 size={16} />
-                                </button>
-                                <button onClick={() => deleteRegion(region.id)} className="p-1.5 text-gray-400 hover:text-red-600 rounded hover:bg-white">
-                                    <Trash2 size={16} />
-                                </button>
+                                {can('devices.change_region') && (
+                                    <button onClick={() => openRegionModal(region)} className="p-1.5 text-gray-400 hover:text-blue-600 rounded hover:bg-white">
+                                        <Edit2 size={16} />
+                                    </button>
+                                )}
+                                {can('devices.delete_region') && (
+                                    <button onClick={() => deleteRegion(region.id)} className="p-1.5 text-gray-400 hover:text-red-600 rounded hover:bg-white">
+                                        <Trash2 size={16} />
+                                    </button>
+                                )}
                             </div>
                         </div>
 
@@ -173,12 +186,14 @@ const SiteManagement = () => {
                                                     </p>
                                                 )}
                                             </div>
-                                            <button
-                                                onClick={() => openSiteModal(site.name)}
-                                                className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-blue-600"
-                                            >
-                                                <Edit2 size={14} />
-                                            </button>
+                                            {can('devices.change_site') && (
+                                                <button
+                                                    onClick={() => openSiteModal(site.name)}
+                                                    className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-blue-600"
+                                                >
+                                                    <Edit2 size={14} />
+                                                </button>
+                                            )}
                                         </div>
                                     ))}
                                 </div>

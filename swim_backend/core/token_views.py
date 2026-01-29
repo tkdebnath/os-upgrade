@@ -5,6 +5,8 @@ from rest_framework.permissions import IsAuthenticated
 from django.contrib.auth.models import User
 from django.utils import timezone
 from swim_backend.core.models import APIToken
+from drf_spectacular.utils import extend_schema_field, extend_schema, OpenApiParameter
+from drf_spectacular.types import OpenApiTypes
 
 
 class APITokenSerializer(serializers.ModelSerializer):
@@ -21,7 +23,8 @@ class APITokenSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['created', 'last_used', 'user', 'key']
     
-    def get_key_preview(self, obj):
+    @extend_schema_field(serializers.CharField)
+    def get_key_preview(self, obj) -> str:
         """Return only first 8 characters for security"""
         return f"{obj.key[:8]}..." if obj.key else None
     
@@ -37,6 +40,37 @@ class APITokenSerializer(serializers.ModelSerializer):
 class APITokenViewSet(viewsets.ModelViewSet):
     serializer_class = APITokenSerializer
     permission_classes = [IsAuthenticated]
+    lookup_value_regex = '[0-9]+'  # Specify that id is numeric
+    
+    def get_permissions(self):
+        """Only superusers can create/delete tokens. Regular users can only view their own."""
+        from rest_framework.permissions import BasePermission
+        
+        class CanManageToken(BasePermission):
+            def has_permission(self, request, view):
+                if not request.user or not request.user.is_authenticated:
+                    return False
+                
+                # Only superusers can create or delete tokens
+                if view.action in ['create', 'destroy']:
+                    return request.user.is_superuser
+                
+                # All authenticated users can list and view
+                return True
+            
+            def has_object_permission(self, request, view, obj):
+                # Superusers can do anything
+                if request.user.is_superuser:
+                    return True
+                
+                # Users can only view their own tokens
+                if view.action in ['retrieve', 'list']:
+                    return obj.user == request.user
+                
+                # Only superusers can update/delete
+                return False
+        
+        return [CanManageToken()]
     
     def get_queryset(self):
         """Users can only see their own tokens"""

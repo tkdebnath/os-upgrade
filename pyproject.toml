@@ -9,6 +9,7 @@ dependencies = [
     "djangorestframework>=3.14.0",
     "django-auth-ldap>=4.6.0",
     "django-cors-headers>=4.3.0",
+    "django-extensions>=3.2.0",
     "django-filter>=23.5",
     "django-unfold>=0.37.0",
     "djangorestframework-api-key>=3.0.0",

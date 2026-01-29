@@ -14,6 +14,8 @@ const JobDetails = () => {
     const [loading, setLoading] = useState(true);
     const [logs, setLogs] = useState([]);
     const [previewCheck, setPreviewCheck] = useState(null);
+    const [selectedChecksCollapsed, setSelectedChecksCollapsed] = useState(true);
+    const [checksReportsCollapsed, setChecksReportsCollapsed] = useState(true);
 
     const downloadCheck = (run) => {
         const element = document.createElement("a");
@@ -27,7 +29,7 @@ const JobDetails = () => {
 
     const downloadArtifact = async (type) => {
         try {
-            const res = await axios.get(`/api/jobs/${id}/download_artifacts/`, {
+            const res = await axios.get(`/api/core/jobs/${id}/download_artifacts/`, {
                 params: { type },
                 responseType: 'blob'
             });
@@ -61,7 +63,7 @@ const JobDetails = () => {
 
     const fetchJobDetails = async () => {
         try {
-            const res = await axios.get(`/api/jobs/${id}/`);
+            const res = await axios.get(`/api/core/jobs/${id}/`);
             setJob(res.data);
 
             // Parse logs from the big string
@@ -187,24 +189,38 @@ const JobDetails = () => {
 
                     {/* Selected Checks Config */}
                     <div className="bg-white p-5 rounded-lg border border-gray-200 shadow-sm">
-                        <h3 className="font-bold text-gray-800 mb-4 flex items-center">
-                            <CheckCircle size={18} className="mr-2 text-purple-600" /> Selected Checks
+                        <h3 
+                            className="font-bold text-gray-800 mb-4 flex items-center justify-between cursor-pointer hover:text-blue-600 transition-colors"
+                            onClick={() => setSelectedChecksCollapsed(!selectedChecksCollapsed)}
+                        >
+                            <div className="flex items-center">
+                                <CheckCircle size={18} className="mr-2 text-purple-600" /> 
+                                Selected Checks
+                                {job.selected_checks_details && job.selected_checks_details.length > 0 && (
+                                    <span className="ml-2 text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">
+                                        {job.selected_checks_details.length}
+                                    </span>
+                                )}
+                            </div>
+                            <ChevronDown size={18} className={`transition-transform ${selectedChecksCollapsed ? '' : 'rotate-180'}`} />
                         </h3>
-                        <div className="space-y-3">
-                            {job.selected_checks_details && job.selected_checks_details.length > 0 ? (
-                                job.selected_checks_details.map(check => (
-                                    <div key={check.id} className="text-sm p-2 bg-purple-50 rounded border border-purple-100">
-                                        <div className="flex justify-between items-center mb-1">
-                                            <span className="font-bold text-gray-800 text-xs">{check.name}</span>
-                                            <span className="text-[10px] uppercase font-bold text-purple-700 px-1.5 py-0.5 bg-purple-100 rounded">{check.check_type || 'Custom'}</span>
+                        {!selectedChecksCollapsed && (
+                            <div className="space-y-3">
+                                {job.selected_checks_details && job.selected_checks_details.length > 0 ? (
+                                    job.selected_checks_details.map(check => (
+                                        <div key={check.id} className="text-sm p-2 bg-purple-50 rounded border border-purple-100">
+                                            <div className="flex justify-between items-center mb-1">
+                                                <span className="font-bold text-gray-800 text-xs">{check.name}</span>
+                                                <span className="text-[10px] uppercase font-bold text-purple-700 px-1.5 py-0.5 bg-purple-100 rounded">{check.check_type || 'Custom'}</span>
+                                            </div>
+                                            <div className="font-mono text-xs text-gray-600 break-all">{check.command}</div>
                                         </div>
-                                        <div className="font-mono text-xs text-gray-600 break-all">{check.command}</div>
-                                    </div>
-                                ))
-                            ) : (
-                                <p className="text-gray-400 text-sm italic">No checks selected.</p>
-                            )}
-                        </div>
+                                    ))
+                                ) : (
+                                    <p className="text-gray-400 text-sm italic">No checks selected.</p>
+                                )}
+                            </div>
+                        )}
                     </div>
 
                     {/* Progress Timeline */}
@@ -252,52 +268,74 @@ const JobDetails = () => {
 
                     {/* Pre-Checks Summary */}
                     <div className="bg-white p-5 rounded-lg border border-gray-200 shadow-sm">
-                        <h3 className="font-bold text-gray-800 mb-4 flex items-center">
-                            <CheckCircle size={18} className="mr-2 text-indigo-600" /> Checks & Reports
+                        <h3 
+                            className="font-bold text-gray-800 mb-4 flex items-center justify-between cursor-pointer hover:text-blue-600 transition-colors"
+                            onClick={() => setChecksReportsCollapsed(!checksReportsCollapsed)}
+                        >
+                            <div className="flex items-center">
+                                <CheckCircle size={18} className="mr-2 text-indigo-600" /> 
+                                Checks & Reports
+                                {job.check_runs && job.check_runs.length > 0 && (
+                                    <span className="ml-2 text-xs bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full">
+                                        {job.check_runs.length}
+                                    </span>
+                                )}
+                            </div>
+                            <ChevronDown size={18} className={`transition-transform ${checksReportsCollapsed ? '' : 'rotate-180'}`} />
                         </h3>
-                        <div className="space-y-3">
-                            {job.check_runs && job.check_runs.length > 0 ? (
-                                job.check_runs.map(run => (
-                                    <div key={run.id} className="text-sm p-3 bg-gray-50 rounded border border-gray-100">
-                                        <div className="flex justify-between items-start mb-2">
-                                            <div className="flex flex-col">
-                                                <span className="font-bold text-gray-800 text-xs uppercase tracking-wider">{run.check_type} Check</span>
-                                                <span className="font-medium text-blue-900">{run.check_name}</span>
+                        {!checksReportsCollapsed && (
+                            <div className="space-y-3">
+                                {job.check_runs && job.check_runs.length > 0 ? (
+                                    job.check_runs.map(run => (
+                                        <div key={run.id} className="text-sm p-3 bg-gray-50 rounded border border-gray-100">
+                                            <div className="flex justify-between items-start mb-2">
+                                                <div className="flex flex-col">
+                                                    <span className={`font-bold text-xs uppercase tracking-wider ${
+                                                        run.phase === 'pre' ? 'text-blue-700' : 
+                                                        run.phase === 'post' ? 'text-purple-700' : 
+                                                        'text-gray-700'
+                                                    }`}>
+                                                        {run.phase === 'pre' ? 'PRE-CHECK' : 
+                                                         run.phase === 'post' ? 'POST-CHECK' : 
+                                                         'BOTH CHECK'}
+                                                    </span>
+                                                    <span className="font-medium text-blue-900">{run.check_name}</span>
+                                                </div>
+                                                <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${run.status === 'success' ? 'bg-green-100 text-green-700' :
+                                                    run.status === 'failed' ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'
+                                                    }`}>
+                                                    {run.status}
+                                                </span>
                                             </div>
-                                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${run.status === 'success' ? 'bg-green-100 text-green-700' :
-                                                run.status === 'failed' ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'
-                                                }`}>
-                                                {run.status}
-                                            </span>
-                                        </div>
 
-                                        {/* Parameters */}
-                                        <div className="mb-2">
-                                            <code className="text-[10px] bg-gray-200 px-1 py-0.5 rounded text-gray-600 break-all">
-                                                {run.check_command}
-                                            </code>
-                                        </div>
+                                            {/* Parameters */}
+                                            <div className="mb-2">
+                                                <code className="text-[10px] bg-gray-200 px-1 py-0.5 rounded text-gray-600 break-all">
+                                                    {run.check_command}
+                                                </code>
+                                            </div>
 
-                                        <div className="flex justify-end space-x-2 pt-2 border-t border-gray-200">
-                                            <button
-                                                onClick={() => setPreviewCheck(run)}
-                                                className="flex items-center space-x-1 text-xs text-gray-500 hover:text-blue-600 font-medium"
-                                            >
-                                                <FileText size={12} /> <span>Preview</span>
-                                            </button>
-                                            <button
-                                                onClick={() => downloadCheck(run)}
-                                                className="flex items-center space-x-1 text-xs text-gray-500 hover:text-blue-600 font-medium"
-                                            >
-                                                <Download size={12} /> <span>Download</span>
-                                            </button>
+                                            <div className="flex justify-end space-x-2 pt-2 border-t border-gray-200">
+                                                <button
+                                                    onClick={() => setPreviewCheck(run)}
+                                                    className="flex items-center space-x-1 text-xs text-gray-500 hover:text-blue-600 font-medium"
+                                                >
+                                                    <FileText size={12} /> <span>Preview</span>
+                                                </button>
+                                                <button
+                                                    onClick={() => downloadCheck(run)}
+                                                    className="flex items-center space-x-1 text-xs text-gray-500 hover:text-blue-600 font-medium"
+                                                >
+                                                    <Download size={12} /> <span>Download</span>
+                                                </button>
+                                            </div>
                                         </div>
-                                    </div>
-                                ))
-                            ) : (
-                                <p className="text-gray-400 text-sm italic">No specific checks executed.</p>
-                            )}
-                        </div>
+                                    ))
+                                ) : (
+                                    <p className="text-gray-400 text-sm italic">No specific checks executed.</p>
+                                )}
+                            </div>
+                        )}
                     </div>
                 </div>
 

@@ -28,7 +28,7 @@ const Checks = () => {
 
     const fetchDevices = async () => {
         try {
-            const res = await axios.get('/api/devices/');
+            const res = await axios.get('/api/dcim/devices/');
             setDevices(res.data.results || res.data);
         } catch (error) { console.error(error); }
     };
@@ -36,14 +36,14 @@ const Checks = () => {
     const fetchAvailableChecks = async () => {
         try {
             // Filter only genie/script checks, maybe? For now create all allowed.
-            const res = await axios.get('/api/checks/');
+            const res = await axios.get('/api/core/checks/');
             setAvailableChecks(res.data.results || res.data);
         } catch (error) { console.error(error); }
     };
 
     const fetchCheckRuns = async () => {
         try {
-            const res = await axios.get('/api/check-runs/');
+            const res = await axios.get('/api/core/check-runs/');
             setCheckRuns(res.data.results || res.data);
         } catch (error) { console.error(error); }
     };
@@ -56,7 +56,7 @@ const Checks = () => {
 
         setRunning(true);
         try {
-            await axios.post('/api/check-runs/run/', {
+            await axios.post('/api/core/check-runs/run/', {
                 devices: selectedDeviceIds,
                 checks: selectedCheckIds
             });

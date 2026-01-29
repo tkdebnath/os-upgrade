@@ -23,9 +23,9 @@ const EditSiteModal = ({ siteName, onClose, onSuccess }) => {
         const init = async () => {
             try {
                 const [sitesRes, fsRes, regRes] = await Promise.all([
-                    axios.get('/api/sites/'),
-                    axios.get('/api/file-servers/'),
-                    axios.get('/api/regions/')
+                    axios.get('/api/dcim/sites/'),
+                    axios.get('/api/images/file-servers/'),
+                    axios.get('/api/dcim/regions/')
                 ]);
 
                 const allSites = sitesRes.data.results || sitesRes.data;
@@ -55,7 +55,7 @@ const EditSiteModal = ({ siteName, onClose, onSuccess }) => {
         if (!siteObj) return;
         setLoading(true);
         try {
-            await axios.patch(`/api/sites/${siteObj.id}/`, {
+            await axios.patch(`/api/dcim/sites/${siteObj.id}/`, {
                 preferred_file_server: preferredFileServer || null,
                 region: regionId || null
             });

@@ -5,7 +5,7 @@ import { ArrowLeft, Server, AlertCircle, CheckCircle, Edit, Globe } from 'lucide
 import EditSiteModal from './EditSiteModal';
 
 const SiteDetail = () => {
-    const { id } = useParams(); // id is the site name
+    const { id } = useParams(); // id is the site ID (numeric)
     const [devices, setDevices] = useState([]);
     const [siteObj, setSiteObj] = useState(null);
     const [fileServers, setFileServers] = useState([]);
@@ -14,22 +14,20 @@ const SiteDetail = () => {
 
     const fetchData = async () => {
         try {
-            // Parallel fetch: Devices, Sites (to find this site object), FileServers (for name resolution)
-            const [devRes, sitesRes, fsRes] = await Promise.all([
-                axios.get('/api/devices/'),
-                axios.get('/api/sites/'),
-                axios.get('/api/file-servers/')
+            // Parallel fetch: Site detail, Devices, FileServers
+            const [siteRes, devRes, fsRes] = await Promise.all([
+                axios.get(`/api/dcim/sites/${id}/`),
+                axios.get('/api/dcim/devices/'),
+                axios.get('/api/images/file-servers/')
             ]);
 
-            // Devices
-            const allDevices = devRes.data.results || devRes.data;
-            const siteDevices = allDevices.filter(d => (d.site || 'Global') === id);
-            setDevices(siteDevices);
-
             // Site Object
-            const allSites = sitesRes.data.results || sitesRes.data;
-            const foundSite = allSites.find(s => s.name === id);
-            setSiteObj(foundSite || { name: id, preferred_file_server: null }); // Fallback if not found (e.g. Global/Virtual)
+            setSiteObj(siteRes.data);
+
+            // Devices - filter by site ID
+            const allDevices = devRes.data.results || devRes.data;
+            const siteDevices = allDevices.filter(d => d.site_id === parseInt(id));
+            setDevices(siteDevices);
 
             // File Servers
             setFileServers(fsRes.data.results || fsRes.data);
@@ -65,7 +63,7 @@ const SiteDetail = () => {
                 <div>
                     <h1 className="text-2xl font-bold text-gray-800 flex items-center">
                         <Globe className="mr-2 text-blue-600" size={24} />
-                        {id} Site
+                        {siteObj?.name || 'Loading...'} Site
                     </h1>
                     <div className="flex items-center text-sm text-gray-500 space-x-4 mt-1">
                         <span>{devices.length} Devices • {reachableCount} Reachable</span>
@@ -128,9 +126,9 @@ const SiteDetail = () => {
                 </table>
             </div>
 
-            {showEditModal && (
+            {showEditModal && siteObj && (
                 <EditSiteModal
-                    siteName={id}
+                    siteName={siteObj.name}
                     onClose={() => setShowEditModal(false)}
                     onSuccess={fetchData}
                 />

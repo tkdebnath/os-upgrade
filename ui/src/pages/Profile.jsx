@@ -67,7 +67,7 @@ const Profile = () => {
 
     const fetchUserDetails = async () => {
         try {
-            const res = await axios.get(`/api/users/${currentUser.id}/`);
+            const res = await axios.get(`/api/users/users/${currentUser.id}/`);
             setUserDetails(res.data);
             setProfileForm({
                 first_name: res.data.first_name || '',
@@ -85,7 +85,7 @@ const Profile = () => {
         setMessage({ type: '', text: '' });
 
         try {
-            await axios.patch(`/api/users/${currentUser.id}/`, profileForm);
+            await axios.patch(`/api/users/users/${currentUser.id}/`, profileForm);
             setMessage({ type: 'success', text: 'Profile updated successfully!' });
             await checkAuth(); // Refresh user data
             fetchUserDetails();
@@ -117,7 +117,7 @@ const Profile = () => {
         }
 
         try {
-            await axios.post(`/api/users/${currentUser.id}/set_password/`, {
+            await axios.post(`/api/users/users/${currentUser.id}/set_password/`, {
                 password: passwordForm.new_password
             });
             setMessage({ type: 'success', text: 'Password changed successfully!' });
@@ -138,7 +138,7 @@ const Profile = () => {
 
     const fetchApiTokens = async () => {
         try {
-            const response = await axios.get('/api/api-tokens/');
+            const response = await axios.get('/api/users/tokens/');
             // Handle paginated response from Django REST Framework
             setApiKeys(response.data.results || response.data);
         } catch (error) {
@@ -148,7 +148,7 @@ const Profile = () => {
 
     const fetchActivityLogs = async () => {
         try {
-            const response = await axios.get('/api/activity-logs/my_logs/');
+            const response = await axios.get('/api/core/activity-logs/my_logs/');
             setActivityLogs(response.data);
         } catch (error) {
             console.error('Error fetching activity logs:', error);
@@ -218,7 +218,7 @@ const Profile = () => {
                 payload.allowed_ips = '';
             }
             
-            const response = await axios.post('/api/api-tokens/', payload);
+            const response = await axios.post('/api/users/tokens/', payload);
             setNewTokenData(response.data);
             setShowTokenModal(true);
             setTokenForm({
@@ -237,7 +237,7 @@ const Profile = () => {
     const deleteKey = async (id) => {
         if (confirm('Are you sure you want to delete this API token?')) {
             try {
-                await axios.delete(`/api/api-tokens/${id}/`);
+                await axios.delete(`/api/users/tokens/${id}/`);
                 fetchApiTokens();
             } catch (error) {
                 console.error('Error deleting token:', error);
@@ -317,7 +317,7 @@ const Profile = () => {
                         {[
                             { id: 'profile', label: 'Profile Information', icon: User },
                             { id: 'security', label: 'Security', icon: Lock },
-                            { id: 'apikeys', label: 'API Keys', icon: Key },
+                            ...(currentUser?.is_superuser ? [{ id: 'apikeys', label: 'API Keys', icon: Key }] : []),
                             { id: 'activity', label: 'Activity Log', icon: Activity },
                             { id: 'groups', label: 'Groups & Permissions', icon: Shield }
                         ].map(tab => (

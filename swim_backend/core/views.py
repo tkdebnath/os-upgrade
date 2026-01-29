@@ -1,11 +1,13 @@
 from rest_framework import serializers, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
 from .models import Job, GoldenImage, ValidationCheck, CheckRun, Workflow, WorkflowStep
 from .logic import run_swim_job, log_update
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter
 import threading
+import os
 
 class GoldenImageSerializer(serializers.ModelSerializer):
     class Meta:
@@ -21,10 +23,58 @@ class CheckRunSerializer(serializers.ModelSerializer):
     check_type = serializers.CharField(source='validation_check.check_type', read_only=True)
     check_command = serializers.CharField(source='validation_check.command', read_only=True)
     device_hostname = serializers.CharField(source='device.hostname', read_only=True)
+    output = serializers.SerializerMethodField()
+    phase = serializers.SerializerMethodField()
 
     class Meta:
         model = CheckRun
-        fields = ['id', 'status', 'output', 'created_at', 'check_name', 'check_type', 'check_command', 'device_hostname']
+        fields = ['id', 'status', 'output', 'created_at', 'check_name', 'check_type', 'check_command', 'device_hostname', 'phase']
+    
+    def get_phase(self, obj):
+        """Extract phase (pre/post) from output field"""
+        output_str = obj.output or ""
+        if output_str.startswith('precheck:'):
+            return 'pre'
+        elif output_str.startswith('postcheck:'):
+            return 'post'
+        return 'both'
+    
+    def get_output(self, obj):
+        """Read actual file content from disk"""
+        import os
+        output_str = obj.output or ""
+        
+        # Check if output contains file path info (format: "precheck:path:name:category:command")
+        if output_str.startswith(('precheck:', 'postcheck:')):
+            try:
+                parts = output_str.split(':', 5)
+                if len(parts) >= 5:
+                    phase = parts[0]  # precheck or postcheck
+                    log_dir = parts[1]
+                    check_name = parts[2]
+                    category = parts[3]
+                    command = parts[4]
+                    
+                    # Build filename based on check type
+                    if category == 'genie':
+                        # Genie format: {feature}_{os}_{hostname}_ops.txt
+                        device = obj.device
+                        filename = f"{command}_iosxe_{device.hostname}_ops.txt"
+                    else:
+                        # Command format: sanitized check name
+                        safe_name = "".join(c if c.isalnum() else "_" for c in check_name)
+                        filename = f"{safe_name}.txt"
+                    
+                    file_path = os.path.join(log_dir, phase, filename)
+                    
+                    if os.path.exists(file_path):
+                        with open(file_path, 'r') as f:
+                            return f.read()
+            except Exception as e:
+                return f"Error reading check file: {e}"
+        
+        # Fallback to stored output
+        return output_str
 
 class WorkflowStepSerializer(serializers.ModelSerializer):
     class Meta:
@@ -187,25 +237,61 @@ class JobViewSet(viewsets.ModelViewSet):
             
             checks = job.check_runs.all()
             if type == 'pre':
-                checks = checks.filter(check_type='pre')
+                # Filter by checking if output starts with "precheck:"
+                checks = [c for c in checks if c.output and c.output.startswith('precheck:')]
             elif type == 'post':
-                checks = checks.filter(check_type='post')
+                # Filter by checking if output starts with "postcheck:"
+                checks = [c for c in checks if c.output and c.output.startswith('postcheck:')]
             # else 'all' -> all checks
             
-            # Add Check Outputs
+            # Add Check Outputs from actual files
             for check in checks:
-                safe_cmd = (check.check_command or "unknown").replace(' ','_')
-                filename = f"{check.check_type}_{safe_cmd}_{check.id}.txt"
-                zip_file.writestr(filename, check.output or "No Output")
+                output_str = check.output or ""
+                content = "No output available"
+                
+                # Read from actual file
+                if output_str.startswith(('precheck:', 'postcheck:')):
+                    try:
+                        parts = output_str.split(':', 5)
+                        if len(parts) >= 5:
+                            phase = parts[0]
+                            log_dir = parts[1]
+                            check_name = parts[2]
+                            category = parts[3]
+                            command = parts[4]
+                            
+                            # Build filename
+                            if category == 'genie':
+                                filename = f"{command}_iosxe_{check.device.hostname}_ops.txt"
+                            else:
+                                safe_name = "".join(c if c.isalnum() else "_" for c in check_name)
+                                filename = f"{safe_name}.txt"
+                            
+                            file_path = os.path.join(log_dir, phase, filename)
+                            
+                            if os.path.exists(file_path):
+                                with open(file_path, 'r') as f:
+                                    content = f.read()
+                    except Exception as e:
+                        content = f"Error reading file: {e}"
+                else:
+                    content = output_str
+                
+                # Archive name
+                safe_cmd = (check.validation_check.command or "unknown").replace(' ','_').replace('/','_')
+                archive_filename = f"{phase}_{safe_cmd}_{check.id}.txt"
+                zip_file.writestr(archive_filename, content)
                 
             # If 'all', also add diff and report
             if type == 'all':
                 zip_file.writestr("job_report.txt", job.log)
                 # Try to add Diff file
-                log_dir = f"logs/{job.device_hostname}/{job.id}/"
+                log_dir = f"logs/{job.device.id if job.device else 'unknown'}/{job.id}/"
                 import os
-                if os.path.exists(os.path.join(log_dir, 'diff_summary.txt')):
-                     zip_file.write(os.path.join(log_dir, 'diff_summary.txt'), arcname="diff_summary.txt")
+                diff_path = os.path.join(log_dir, 'diffs', 'diff_summary.txt')
+                if os.path.exists(diff_path):
+                     with open(diff_path, 'r') as f:
+                         zip_file.writestr("diff_summary.txt", f.read())
         
         buffer.seek(0)
         response = HttpResponse(buffer, content_type='application/zip')
@@ -234,7 +320,7 @@ class JobViewSet(viewsets.ModelViewSet):
         activation_time = request.data.get('activation_time')
         activate_after_distribute = request.data.get('activate_after_distribute', True)
         cleanup_flash = request.data.get('cleanup_flash', False)
-        task_name = request.data.get('task_name', 'Upgrade-Task')
+        task_name = request.data.get('task_name', 'Distribution-Task')
         
         # New Params
         import uuid
@@ -481,7 +567,20 @@ class CheckRunViewSet(viewsets.ModelViewSet):
 class DashboardViewSet(viewsets.ViewSet):
     """
     API for Dashboard aggregations.
+    Users see only data they have permissions for.
     """
+    
+    def get_permissions(self):
+        """Require view_dashboard permission or superuser status"""
+        from rest_framework.permissions import BasePermission
+        
+        class CanViewDashboard(BasePermission):
+            def has_permission(self, request, view):
+                return request.user and request.user.is_authenticated and \
+                       (request.user.is_superuser or request.user.has_perm('core.view_dashboard'))
+        
+        return [CanViewDashboard()]
+    
     @action(detail=False, methods=['get'])
     def stats(self, request):
         from swim_backend.devices.models import Device
@@ -489,49 +588,113 @@ class DashboardViewSet(viewsets.ViewSet):
         from django.utils import timezone
         import datetime
 
-        total_devices = Device.objects.count()
-        sites_qs = Device.objects.values('site').distinct()
-        site_count = sites_qs.count()
-        
-        reachable_count = Device.objects.filter(reachability='Reachable').count()
-        unreachable_count = Device.objects.filter(reachability='Unreachable').count()
-        
-        last_24h = timezone.now() - datetime.timedelta(days=1)
-        critical_issues = Job.objects.filter(status='failed', created_at__gte=last_24h).count()
+        # Check what permissions the user has
+        can_view_devices = request.user.is_superuser or request.user.has_perm('devices.view_device')
+        can_view_jobs = request.user.is_superuser or request.user.has_perm('core.view_job')
+
+        # Initialize default values
+        total_devices = 0
+        site_count = 0
+        reachable_count = 0
+        unreachable_count = 0
+        devices_per_site = []
+        devices_per_model = []
+        devices_per_version = []
+        compliant_count = 0
+        non_compliant_count = 0
+
+        # Get device data if user has permission
+        if can_view_devices:
+            total_devices = Device.objects.count()
+            sites_qs = Device.objects.values('site').distinct()
+            site_count = sites_qs.count()
+            
+            reachable_count = Device.objects.filter(reachability='Reachable').count()
+            unreachable_count = Device.objects.filter(reachability='Unreachable').count()
+            
+            from django.db.models import Count
+
+            # Aggregations for Graphs
+            devices_per_site = list(Device.objects.values('site__name').annotate(value=Count('id')).order_by('-value'))
+            devices_per_model = list(Device.objects.values('model__name').annotate(value=Count('id')).order_by('-value'))
+            devices_per_version = list(Device.objects.values('version').annotate(value=Count('id')).order_by('-value'))
+
+            # Compliance calculation using model-based golden image
+            compliant_count = 0  # Up to Date
+            ahead_count = 0  # Ahead of golden version
+            non_compliant_count = 0  # Outdated + No Standard
+            
+            def compare_versions(v1, v2):
+                """Simple version comparison. Returns: -1 (v1 < v2), 0 (equal), 1 (v1 > v2)"""
+                if not v1 or not v2:
+                    return None
+                try:
+                    p1 = str(v1).replace('-', '.').split('.')
+                    p2 = str(v2).replace('-', '.').split('.')
+                    for i in range(max(len(p1), len(p2))):
+                        val1 = p1[i] if i < len(p1) else '0'
+                        val2 = p2[i] if i < len(p2) else '0'
+                        # Try to compare as integers
+                        try:
+                            n1 = int(''.join(filter(str.isdigit, val1)) or '0')
+                            n2 = int(''.join(filter(str.isdigit, val2)) or '0')
+                            if n1 > n2:
+                                return 1
+                            elif n1 < n2:
+                                return -1
+                        except ValueError:
+                            if val1 > val2:
+                                return 1
+                            elif val1 < val2:
+                                return -1
+                    return 0
+                except:
+                    return None
+            
+            for dev in Device.objects.all():
+                if not dev.model:
+                    non_compliant_count += 1  # No model
+                    continue
+                
+                # Get golden version from either default_image or golden_image_version
+                golden_version = None
+                if dev.model.default_image:
+                    golden_version = dev.model.default_image.version
+                elif dev.model.golden_image_version:
+                    golden_version = dev.model.golden_image_version
+                
+                if not golden_version:
+                    non_compliant_count += 1  # No Standard
+                else:
+                    comparison = compare_versions(dev.version, golden_version)
+                    if comparison is None or comparison < 0:
+                        non_compliant_count += 1  # Outdated or unparseable
+                    elif comparison == 0:
+                        compliant_count += 1  # Up to Date
+                    else:  # comparison > 0
+                        ahead_count += 1  # Ahead
         
         # Calculate health percentage
         health_percentage = 0
         if total_devices > 0:
             health_percentage = int((reachable_count / total_devices) * 100)
+
+        # Job data if user has permission
+        critical_issues = 0
+        jobs_running = 0
+        jobs_scheduled = 0
+        jobs_failed = 0
+        jobs_success = 0
+
+        if can_view_jobs:
+            last_24h = timezone.now() - datetime.timedelta(days=1)
+            critical_issues = Job.objects.filter(status='failed', created_at__gte=last_24h).count()
             
-        from django.db.models import Count
-
-        # Aggregations for Graphs
-        devices_per_site = list(Device.objects.values('site__name').annotate(value=Count('id')).order_by('-value'))
-        devices_per_model = list(Device.objects.values('model__name').annotate(value=Count('id')).order_by('-value'))
-        devices_per_version = list(Device.objects.values('version').annotate(value=Count('id')).order_by('-value'))
-
-        # Compliance Basic Heuristic (Checking if version matches a GoldenImage for that platform)
-        # 1. Get map of platform -> golden_version
-        golden_map = {}
-        for gi in GoldenImage.objects.all():
-            golden_map[gi.platform] = gi.image.version if gi.image else None
-            
-        compliant_count = 0
-        non_compliant_count = 0
-        
-        for dev in Device.objects.all():
-            target_version = golden_map.get(dev.platform)
-            if target_version and dev.version == target_version:
-                compliant_count += 1
-            else:
-                non_compliant_count += 1
-
-        # Job Status Breakdown
-        jobs_running = Job.objects.filter(status__in=['running', 'distributing', 'activating']).count()
-        jobs_scheduled = Job.objects.filter(status__in=['scheduled', 'pending']).count()
-        jobs_failed = Job.objects.filter(status='failed').count()
-        jobs_success = Job.objects.filter(status__in=['success', 'distributed']).count()
+            # Job Status Breakdown
+            jobs_running = Job.objects.filter(status__in=['running', 'distributing', 'activating']).count()
+            jobs_scheduled = Job.objects.filter(status__in=['scheduled', 'pending']).count()
+            jobs_failed = Job.objects.filter(status='failed').count()
+            jobs_success = Job.objects.filter(status__in=['success', 'distributed']).count()
 
         return Response({
             "health": {
@@ -555,6 +718,7 @@ class DashboardViewSet(viewsets.ViewSet):
                 "by_version": [{"name": d['version'] or 'Unknown', "value": d['value']} for d in devices_per_version],
                 "compliance": [
                     {"name": "Compliant", "value": compliant_count},
+                    {"name": "Ahead", "value": ahead_count},
                     {"name": "Non-Compliant", "value": non_compliant_count}
                 ],
                 "job_status": [

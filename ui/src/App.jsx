@@ -26,6 +26,7 @@ import PermissionList from './features/admin/PermissionList';
 import PermissionBundles from './features/admin/PermissionBundles';
 import { AuthProvider } from './context/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
+import AdminOnlyRoute from './components/AdminOnlyRoute';
 
 function App() {
   return (
@@ -47,17 +48,17 @@ function App() {
             <Route path="scheduled-jobs" element={<ScheduledJobs />} />
             <Route path="checks" element={<CheckRunner />} />
             <Route path="images" element={<ImageRepo />} />
-            <Route path="settings" element={<Settings />} />
-            <Route path="settings/validation" element={<ValidationSettings />} />
+            <Route path="settings" element={<AdminOnlyRoute><Settings /></AdminOnlyRoute>} />
+            <Route path="settings/validation" element={<AdminOnlyRoute><ValidationSettings /></AdminOnlyRoute>} />
             <Route path="profile" element={<Profile />} />
             <Route path="standards" element={<ModelsList />} />
             <Route path="upgrade" element={<UpgradeWizard />} />
-            <Route path="workflows" element={<WorkflowEditor />} />
-            <Route path="admin" element={<AdminPanel />} />
-            <Route path="admin/users" element={<UserManagement />} />
-            <Route path="admin/groups" element={<GroupManagement />} />
-            <Route path="admin/permissions" element={<PermissionList />} />
-            <Route path="admin/bundles" element={<PermissionBundles />} />
+            <Route path="workflows" element={<AdminOnlyRoute><WorkflowEditor /></AdminOnlyRoute>} />
+            <Route path="admin" element={<AdminOnlyRoute><AdminPanel /></AdminOnlyRoute>} />
+            <Route path="admin/users" element={<AdminOnlyRoute><UserManagement /></AdminOnlyRoute>} />
+            <Route path="admin/groups" element={<AdminOnlyRoute><GroupManagement /></AdminOnlyRoute>} />
+            <Route path="admin/permissions" element={<AdminOnlyRoute><PermissionList /></AdminOnlyRoute>} />
+            <Route path="admin/bundles" element={<AdminOnlyRoute><PermissionBundles /></AdminOnlyRoute>} />
           </Route>
         </Routes>
       </AuthProvider>

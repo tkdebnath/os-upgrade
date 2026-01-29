@@ -79,9 +79,9 @@ class Device(models.Model):
     class Meta:
         ordering = ['hostname']
         permissions = [
-            ("can_sync_device", "Can sync device inventory"),
-            ("can_upgrade_device", "Can upgrade device firmware"),
-            ("can_check_readiness", "Can check device readiness"),
+            ("sync_device_inventory", "Can sync device inventory"),
+            ("upgrade_device_firmware", "Can upgrade device firmware"),
+            ("check_device_readiness", "Can check device readiness"),
         ]
     
     def __str__(self):

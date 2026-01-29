@@ -1,11 +1,15 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 import { Network, Activity, Clock, PieChart as PieIcon, BarChart as BarIcon, CheckCircle } from 'lucide-react';
+import { useAuth } from './context/AuthContext';
 
 const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6'];
 
 const Dashboard = () => {
+    const navigate = useNavigate();
+    const { user } = useAuth();
     const [devices, setDevices] = useState([]);
     const [jobs, setJobs] = useState([]);
     const [stats, setStats] = useState({ analytics: null });
@@ -19,17 +23,23 @@ const Dashboard = () => {
     const [jobStats, setJobStats] = useState(initialJobStats);
 
     useEffect(() => {
+        // Redirect to profile if user has no dashboard permissions
+        if (user && !user.is_superuser && !user.permissions?.includes('core.view_dashboard')) {
+            navigate('/profile', { replace: true });
+            return;
+        }
+        
         fetchData();
         const interval = setInterval(fetchData, 5000);
         return () => clearInterval(interval);
-    }, []);
+    }, [user, navigate]);
 
     const fetchData = async () => {
         try {
             const [devRes, jobRes, statsRes] = await Promise.all([
-                axios.get('/api/devices/'),
-                axios.get('/api/jobs/'),
-                axios.get('/api/dashboard/stats/')
+                axios.get('/api/dcim/devices/'),
+                axios.get('/api/core/jobs/'),
+                axios.get('/api/core/dashboard/stats/')
             ]);
             const fetchedDevices = devRes.data.results || devRes.data;
             const fetchedJobs = jobRes.data.results || jobRes.data;
@@ -76,7 +86,12 @@ const Dashboard = () => {
                                         <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                                     ))}
                                 </Pie>
-                                <Tooltip formatter={(value, name) => [value, name]} />
+                                <Tooltip formatter={(value, name, props) => {
+                                    const data = stats.analytics?.by_site || [];
+                                    const total = data.reduce((sum, item) => sum + item.value, 0);
+                                    const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
+                                    return [`${value} (${percentage}%)`, name];
+                                }} />
                                 <Legend />
                             </PieChart>
                         </ResponsiveContainer>
@@ -104,20 +119,32 @@ const Dashboard = () => {
                     <h3 className="text-sm font-semibold text-gray-500 uppercase flex items-center mb-4">
                         <CheckCircle size={16} className="mr-2" /> Compliance
                     </h3>
-                    <div className="h-40">
+                    <div className="h-48">
                         <ResponsiveContainer width="100%" height="100%">
                             <PieChart>
                                 <Pie
                                     data={stats.analytics?.compliance || []}
-                                    cx="50%" cy="50%"
-                                    innerRadius={0} outerRadius={60}
+                                    cx="50%" cy="45%"
+                                    innerRadius={0} outerRadius={55}
                                     dataKey="value"
                                 >
-                                    <Cell fill="#10B981" /> {/* Compliant */}
-                                    <Cell fill="#EF4444" /> {/* Non-Compliant */}
+                                    <Cell fill="#10B981" /> {/* Compliant - Green */}
+                                    <Cell fill="#3B82F6" /> {/* Ahead - Blue */}
+                                    <Cell fill="#EF4444" /> {/* Non-Compliant - Red */}
                                 </Pie>
-                                <Tooltip />
-                                <Legend />
+                                <Tooltip formatter={(value, name) => {
+                                    const data = stats.analytics?.compliance || [];
+                                    const total = data.reduce((sum, item) => sum + item.value, 0);
+                                    const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
+                                    return [`${value} devices (${percentage}%)`, name];
+                                }} />
+                                <Legend 
+                                    layout="horizontal" 
+                                    verticalAlign="bottom" 
+                                    align="center"
+                                    iconSize={10}
+                                    wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }}
+                                />
                             </PieChart>
                         </ResponsiveContainer>
                     </div>

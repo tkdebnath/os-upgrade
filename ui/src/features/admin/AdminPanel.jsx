@@ -44,9 +44,9 @@ const AdminPanel = () => {
     const fetchStats = async () => {
         try {
             const [usersRes, groupsRes, permsRes] = await Promise.all([
-                axios.get('/api/users/'),
-                axios.get('/api/groups/'),
-                axios.get('/api/permissions/')
+                axios.get('/api/users/users/'),
+                axios.get('/api/users/groups/'),
+                axios.get('/api/users/permissions/')
             ]);
 
             const users = usersRes.data.results || usersRes.data;
@@ -78,7 +78,7 @@ const AdminPanel = () => {
                 ...(filters.user && { user: filters.user }),
                 ...(filters.search && { search: filters.search })
             };
-            const response = await axios.get('/api/activity-logs/', { params });
+            const response = await axios.get('/api/core/activity-logs/', { params });
             setActivityLogs(response.data.results || []);
             setPagination({
                 count: response.data.count || 0,

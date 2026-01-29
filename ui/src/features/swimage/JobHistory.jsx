@@ -15,7 +15,7 @@ const Jobs = () => {
     const initiateCancel = async (id) => {
         if (!window.confirm("Are you sure you want to cancel this job?")) return;
         try {
-            await axios.post(`/api/jobs/${id}/cancel/`);
+            await axios.post(`/api/core/jobs/${id}/cancel/`);
             fetchJobs(); // Refresh to show status change
         } catch (error) {
             console.error("Failed to cancel job", error);
@@ -47,7 +47,7 @@ const Jobs = () => {
 
     const fetchJobs = async () => {
         try {
-            const res = await axios.get('/api/jobs/', {
+            const res = await axios.get('/api/core/jobs/', {
                 params: { search: search }
             });
             setJobs(res.data.results || res.data);
@@ -195,7 +195,7 @@ const Jobs = () => {
                                        Wait, the previous edit tried to add it. Let's add it properly.
                                     */
                                     if (confirm(`Cancel ${selectedJobIds.length} jobs?`)) {
-                                        Promise.all(selectedJobIds.map(id => axios.post(`/api/jobs/${id}/cancel/`)))
+                                        Promise.all(selectedJobIds.map(id => axios.post(`/api/core/jobs/${id}/cancel/`)))
                                             .then(() => fetchJobs());
                                         setSelectedJobIds([]);
                                     }

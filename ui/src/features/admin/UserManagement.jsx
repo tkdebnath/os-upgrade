@@ -53,7 +53,7 @@ const UserManagement = () => {
 
     const fetchUsers = async () => {
         try {
-            const res = await axios.get('/api/users/');
+            const res = await axios.get('/api/users/users/');
             setUsers(res.data.results || res.data);
         } catch (error) {
             console.error('Failed to fetch users:', error);
@@ -64,7 +64,7 @@ const UserManagement = () => {
 
     const fetchGroups = async () => {
         try {
-            const res = await axios.get('/api/groups/');
+            const res = await axios.get('/api/users/groups/');
             setGroups(res.data.results || res.data);
         } catch (error) {
             console.error('Failed to fetch groups:', error);
@@ -113,7 +113,7 @@ const UserManagement = () => {
             }
             
             if (editingUser) {
-                await axios.put(`/api/users/${editingUser.id}/`, payload);
+                await axios.put(`/api/users/users/${editingUser.id}/`, payload);
             } else {
                 if (!payload.password) {
                     alert('Password is required for new users');
@@ -132,7 +132,7 @@ const UserManagement = () => {
     const deleteUser = async (id) => {
         if (!confirm('Are you sure you want to delete this user?')) return;
         try {
-            await axios.delete(`/api/users/${id}/`);
+            await axios.delete(`/api/users/users/${id}/`);
             fetchUsers();
         } catch (error) {
             alert('Failed to delete user');
@@ -142,7 +142,7 @@ const UserManagement = () => {
 
     const toggleActive = async (userId) => {
         try {
-            await axios.post(`/api/users/${userId}/toggle_active/`);
+            await axios.post(`/api/users/users/${userId}/toggle_active/`);
             fetchUsers();
         } catch (error) {
             alert('Failed to toggle user status');
@@ -162,7 +162,7 @@ const UserManagement = () => {
             return;
         }
         try {
-            await axios.post(`/api/users/${passwordForm.userId}/set_password/`, {
+            await axios.post(`/api/users/users/${passwordForm.userId}/set_password/`, {
                 password: passwordForm.password
             });
             setShowPasswordModal(false);

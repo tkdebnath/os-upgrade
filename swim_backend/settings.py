@@ -32,7 +32,9 @@ INSTALLED_APPS = [
     # Third party
     'rest_framework',
     'rest_framework_api_key',
+    'drf_spectacular',
     'corsheaders',
+    'django_extensions',
     
     # Local
     'swim_backend.core',
@@ -136,15 +138,53 @@ REST_FRAMEWORK = {
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 100,
     'DEFAULT_AUTHENTICATION_CLASSES': [
+        'swim_backend.authentication.APIKeyAuthentication',
         'swim_backend.authentication.CsrfExemptSessionAuthentication',
     ],
     'DEFAULT_PERMISSION_CLASSES': [
-        'rest_framework.permissions.IsAuthenticated',
+        'swim_backend.core.permissions.DjangoModelPermissionsWithView',
     ],
     # Disable CSRF for API endpoints when using SessionAuthentication
     'DEFAULT_RENDERER_CLASSES': [
         'rest_framework.renderers.JSONRenderer',
         'rest_framework.renderers.BrowsableAPIRenderer',
+    ],
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+}
+
+# Spectacular (Swagger) Settings
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'SWIM API',
+    'DESCRIPTION': 'Software Image Management API - NetBox-style endpoints for managing network devices, software images, and upgrade workflows',
+    'VERSION': '1.0.0',
+    'SERVE_INCLUDE_SCHEMA': False,
+    'SCHEMA_PATH_PREFIX': r'/api/',
+    'COMPONENT_SPLIT_REQUEST': True,
+    'SWAGGER_UI_SETTINGS': {
+        'deepLinking': True,
+        'persistAuthorization': True,
+        'displayOperationId': True,
+    },
+    'AUTHENTICATION_WHITELIST': [],
+    'APPEND_COMPONENTS': {
+        'securitySchemes': {
+            'ApiKeyAuth': {
+                'type': 'apiKey',
+                'in': 'header',
+                'name': 'Authorization',
+                'description': 'API Key authentication. Use format: Token YOUR_TOKEN_HERE'
+            },
+            'SessionAuth': {
+                'type': 'apiKey',
+                'in': 'cookie',
+                'name': 'sessionid',
+                'description': 'Django session authentication (login via /admin/)'
+            }
+        }
+    },
+    'SECURITY': [
+        {'ApiKeyAuth': []},
+        {'SessionAuth': []},
     ],
 }
 

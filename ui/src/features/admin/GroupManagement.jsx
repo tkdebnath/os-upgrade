@@ -47,7 +47,7 @@ const GroupManagement = () => {
 
     const fetchGroups = async () => {
         try {
-            const res = await axios.get('/api/groups/');
+            const res = await axios.get('/api/users/groups/');
             setGroups(res.data.results || res.data);
         } catch (error) {
             console.error('Failed to fetch groups:', error);
@@ -58,7 +58,7 @@ const GroupManagement = () => {
 
     const fetchPermissions = async () => {
         try {
-            const res = await axios.get('/api/permissions/');
+            const res = await axios.get('/api/users/permissions/');
             setPermissions(res.data.results || res.data);
         } catch (error) {
             console.error('Failed to fetch permissions:', error);
@@ -95,9 +95,9 @@ const GroupManagement = () => {
             };
             
             if (editingGroup) {
-                await axios.put(`/api/groups/${editingGroup.id}/`, payload);
+                await axios.put(`/api/users/groups/${editingGroup.id}/`, payload);
             } else {
-                await axios.post('/api/groups/', payload);
+                await axios.post('/api/users/groups/', payload);
             }
             setShowModal(false);
             fetchGroups();
@@ -110,7 +110,7 @@ const GroupManagement = () => {
     const deleteGroup = async (id) => {
         if (!confirm('Are you sure you want to delete this group? Users in this group will lose these permissions.')) return;
         try {
-            await axios.delete(`/api/groups/${id}/`);
+            await axios.delete(`/api/users/groups/${id}/`);
             fetchGroups();
         } catch (error) {
             alert('Failed to delete group');

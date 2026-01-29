@@ -18,8 +18,6 @@ class PostCheckStep(BaseStep):
                 genie_dev.connect(log_stdout=False)
                 
                 for check in all_checks:
-                    self.log(f"Running Post-Check: {check.name}...")
-                    
                     check_run = CheckRun.objects.create(
                         device=device,
                         job=job,
@@ -38,8 +36,10 @@ class PostCheckStep(BaseStep):
                     status = "success" if success else "failed"
                     
                     check_run.status = status
-                    check_run.output = msg
+                    check_run.output = f"postcheck:{log_dir}:{check.name}:{check.category}:{check.command}"
                     check_run.save()
+                    
+                    self.log(f"Post-Check {check.name}: {status}")
             except Exception as e:
                 self.log(f"Error during Post-Checks: {e}")
             finally:
@@ -47,11 +47,10 @@ class PostCheckStep(BaseStep):
                     genie_dev.disconnect()
                 except:
                    pass
-                self.log(f"Post-Check {check.name}: {status}")
 
             # 2. Diff Generation
             self.log("Generating Pre/Post Comparison Diffs...")
-            generate_diffs(job, genie_checks, log_dir)
+            generate_diffs(job, all_checks, log_dir)
             self.log("Diff Generation Complete.")
         
         return 'success', "Post-checks and Diff Complete"

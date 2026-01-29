@@ -20,7 +20,7 @@ const EditDeviceModal = ({ device, onClose, onSuccess }) => {
     useEffect(() => {
         const fetchFileServers = async () => {
             try {
-                const res = await axios.get('/api/file-servers/');
+                const res = await axios.get('/api/images/file-servers/');
                 setFileServers(res.data.results || res.data);
             } catch (e) {
                 console.error("Failed to load file servers", e);
@@ -46,7 +46,7 @@ const EditDeviceModal = ({ device, onClose, onSuccess }) => {
         if (!payload.preferred_file_server) payload.preferred_file_server = null;
 
         try {
-            await axios.patch(`/api/devices/${device.id}/`, payload);
+            await axios.patch(`/api/dcim/devices/${device.id}/`, payload);
             onSuccess();
             onClose();
         } catch (err) {

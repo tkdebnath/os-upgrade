@@ -19,7 +19,7 @@ const GlobalCredentials = () => {
 
     const fetchData = async () => {
         try {
-            const res = await axios.get('/api/global-credentials/');
+            const res = await axios.get('/api/dcim/global-credentials/');
             setFormData(res.data);
         } catch (error) {
             console.error(error);
@@ -32,7 +32,7 @@ const GlobalCredentials = () => {
         e.preventDefault();
         setMessage(null);
         try {
-            await axios.post('/api/global-credentials/', formData);
+            await axios.post('/api/dcim/global-credentials/', formData);
             setMessage({ type: 'success', text: 'Global credentials updated successfully.' });
         } catch (error) {
             setMessage({ type: 'error', text: 'Failed to update credentials.' });

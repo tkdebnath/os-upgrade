@@ -59,7 +59,7 @@ const PermissionBundles = () => {
 
     const fetchBundles = async () => {
         try {
-            const res = await axios.get('/api/permission-bundles/');
+            const res = await axios.get('/api/users/permission-bundles/');
             setBundles(res.data.results || res.data);
         } catch (error) {
             console.error('Failed to fetch bundles:', error);
@@ -70,7 +70,7 @@ const PermissionBundles = () => {
 
     const fetchContentTypes = async () => {
         try {
-            const res = await axios.get('/api/permission-bundles/content_types/');
+            const res = await axios.get('/api/users/permission-bundles/content_types/');
             setContentTypes(res.data);
         } catch (error) {
             console.error('Failed to fetch content types:', error);
@@ -79,7 +79,7 @@ const PermissionBundles = () => {
 
     const fetchCustomActions = async () => {
         try {
-            const res = await axios.get('/api/permission-bundles/custom_actions/');
+            const res = await axios.get('/api/users/permission-bundles/custom_actions/');
             setCustomActions(res.data);
         } catch (error) {
             console.error('Failed to fetch custom actions:', error);
@@ -88,7 +88,7 @@ const PermissionBundles = () => {
 
     const fetchGroups = async () => {
         try {
-            const res = await axios.get('/api/groups/');
+            const res = await axios.get('/api/users/groups/');
             setGroups(res.data.results || res.data);
         } catch (error) {
             console.error('Failed to fetch groups:', error);
@@ -97,7 +97,7 @@ const PermissionBundles = () => {
 
     const fetchUsers = async () => {
         try {
-            const res = await axios.get('/api/users/');
+            const res = await axios.get('/api/users/users/');
             setUsers(res.data.results || res.data);
         } catch (error) {
             console.error('Failed to fetch users:', error);
@@ -143,9 +143,9 @@ const PermissionBundles = () => {
         e.preventDefault();
         try {
             if (editingBundle) {
-                await axios.put(`/api/permission-bundles/${editingBundle.id}/`, bundleForm);
+                await axios.put(`/api/users/permission-bundles/${editingBundle.id}/`, bundleForm);
             } else {
-                await axios.post('/api/permission-bundles/', bundleForm);
+                await axios.post('/api/users/permission-bundles/', bundleForm);
             }
             setShowModal(false);
             fetchBundles();
@@ -157,7 +157,7 @@ const PermissionBundles = () => {
 
     const toggleEnabled = async (bundle) => {
         try {
-            await axios.post(`/api/permission-bundles/${bundle.id}/toggle_enabled/`);
+            await axios.post(`/api/users/permission-bundles/${bundle.id}/toggle_enabled/`);
             fetchBundles();
         } catch (error) {
             alert('Failed to toggle permission bundle');
@@ -168,7 +168,7 @@ const PermissionBundles = () => {
     const deleteBundle = async (id) => {
         if (!confirm('Are you sure you want to delete this permission bundle?')) return;
         try {
-            await axios.delete(`/api/permission-bundles/${id}/`);
+            await axios.delete(`/api/users/permission-bundles/${id}/`);
             fetchBundles();
         } catch (error) {
             alert('Failed to delete bundle');

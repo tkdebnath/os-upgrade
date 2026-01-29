@@ -21,7 +21,7 @@ const AddDeviceModal = ({ onClose, onSuccess }) => {
     useEffect(() => {
         const fetchFileServers = async () => {
             try {
-                const res = await axios.get('/api/file-servers/');
+                const res = await axios.get('/api/images/file-servers/');
                 setFileServers(res.data.results || res.data);
             } catch (e) {
                 console.error("Failed to load file servers", e);
@@ -49,7 +49,7 @@ const AddDeviceModal = ({ onClose, onSuccess }) => {
         };
 
         try {
-            await axios.post('/api/devices/', payload);
+            await axios.post('/api/dcim/devices/', payload);
             onSuccess();
             onClose();
         } catch (err) {

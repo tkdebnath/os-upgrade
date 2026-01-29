@@ -45,7 +45,7 @@ const PermissionList = () => {
 
     const fetchPermissions = async () => {
         try {
-            const res = await axios.get('/api/permissions/');
+            const res = await axios.get('/api/users/permissions/');
             setPermissions(res.data.results || res.data);
         } catch (error) {
             console.error('Failed to fetch permissions:', error);
@@ -56,7 +56,7 @@ const PermissionList = () => {
 
     const fetchContentTypes = async () => {
         try {
-            const res = await axios.get('/api/permissions/content_types/');
+            const res = await axios.get('/api/users/permissions/content_types/');
             setContentTypes(res.data);
         } catch (error) {
             console.error('Failed to fetch content types:', error);
@@ -86,9 +86,9 @@ const PermissionList = () => {
         e.preventDefault();
         try {
             if (editingPermission) {
-                await axios.put(`/api/permissions/${editingPermission.id}/`, permissionForm);
+                await axios.put(`/api/users/permissions/${editingPermission.id}/`, permissionForm);
             } else {
-                await axios.post('/api/permissions/', permissionForm);
+                await axios.post('/api/users/permissions/', permissionForm);
             }
             setShowModal(false);
             fetchPermissions();
@@ -104,7 +104,7 @@ const PermissionList = () => {
     const deletePermission = async (id) => {
         if (!confirm('Are you sure you want to delete this permission? This may affect groups and users that have this permission.')) return;
         try {
-            await axios.delete(`/api/permissions/${id}/`);
+            await axios.delete(`/api/users/permissions/${id}/`);
             fetchPermissions();
         } catch (error) {
             alert('Failed to delete permission. It may be in use by groups.');
