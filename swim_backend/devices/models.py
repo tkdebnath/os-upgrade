@@ -1,5 +1,4 @@
 from django.db import models
-from rest_framework import serializers, viewsets
 
 class Region(models.Model):
     name = models.CharField(max_length=100, unique=True)

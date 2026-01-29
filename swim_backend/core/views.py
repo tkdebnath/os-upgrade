@@ -201,15 +201,16 @@ class JobViewSet(viewsets.ModelViewSet):
         type = request.query_params.get('type', 'report')
         
         import io
+        import os
         import zipfile
         from django.http import HttpResponse
 
         if type == 'report':
             # Simple Text Report
-            content = f"Job Report {job.id} for {job.device_hostname}\n"
+            content = f"Job Report {job.id} for {job.device.hostname}\n"
             content += f"Status: {job.status}\n"
-            content += f"Device: {job.device_hostname}\n"
-            content += f"Image: {job.image_filename}\n"
+            content += f"Device: {job.device.hostname}\n"
+            content += f"Image: {job.image.filename if job.image else 'N/A'}\n"
             content += "="*30 + "\n\n"
             content += job.log
             
@@ -221,8 +222,7 @@ class JobViewSet(viewsets.ModelViewSet):
             # Mock Diff content if file not found
             content = "Diff content unavailable or not generated."
             # Ideally we check /logs/.../diff_summary.txt
-            log_dir = f"logs/{job.device_hostname}/{job.id}/"
-            import os
+            log_dir = f"logs/{job.device.hostname}/{job.id}/"
             if os.path.exists(os.path.join(log_dir, 'diff_summary.txt')):
                  with open(os.path.join(log_dir, 'diff_summary.txt'), 'r') as f:
                      content = f.read()
@@ -235,63 +235,64 @@ class JobViewSet(viewsets.ModelViewSet):
         buffer = io.BytesIO()
         with zipfile.ZipFile(buffer, 'w') as zip_file:
             
-            checks = job.check_runs.all()
-            if type == 'pre':
-                # Filter by checking if output starts with "precheck:"
-                checks = [c for c in checks if c.output and c.output.startswith('precheck:')]
-            elif type == 'post':
-                # Filter by checking if output starts with "postcheck:"
-                checks = [c for c in checks if c.output and c.output.startswith('postcheck:')]
-            # else 'all' -> all checks
+            log_dir = f"logs/{job.device.hostname}/{job.id}/"
             
-            # Add Check Outputs from actual files
-            for check in checks:
-                output_str = check.output or ""
-                content = "No output available"
-                
-                # Read from actual file
-                if output_str.startswith(('precheck:', 'postcheck:')):
-                    try:
-                        parts = output_str.split(':', 5)
-                        if len(parts) >= 5:
-                            phase = parts[0]
-                            log_dir = parts[1]
-                            check_name = parts[2]
-                            category = parts[3]
-                            command = parts[4]
+            # Add entire directories to preserve folder structure
+            if type == 'pre':
+                # Add precheck folder
+                precheck_dir = os.path.join(log_dir, 'precheck')
+                if os.path.exists(precheck_dir):
+                    for root, dirs, files in os.walk(precheck_dir):
+                        for file in files:
+                            file_path = os.path.join(root, file)
+                            arcname = os.path.relpath(file_path, log_dir)
+                            zip_file.write(file_path, arcname)
                             
-                            # Build filename
-                            if category == 'genie':
-                                filename = f"{command}_iosxe_{check.device.hostname}_ops.txt"
-                            else:
-                                safe_name = "".join(c if c.isalnum() else "_" for c in check_name)
-                                filename = f"{safe_name}.txt"
+            elif type == 'post':
+                # Add postcheck folder
+                postcheck_dir = os.path.join(log_dir, 'postcheck')
+                if os.path.exists(postcheck_dir):
+                    for root, dirs, files in os.walk(postcheck_dir):
+                        for file in files:
+                            file_path = os.path.join(root, file)
+                            arcname = os.path.relpath(file_path, log_dir)
+                            zip_file.write(file_path, arcname)
                             
-                            file_path = os.path.join(log_dir, phase, filename)
-                            
-                            if os.path.exists(file_path):
-                                with open(file_path, 'r') as f:
-                                    content = f.read()
-                    except Exception as e:
-                        content = f"Error reading file: {e}"
-                else:
-                    content = output_str
-                
-                # Archive name
-                safe_cmd = (check.validation_check.command or "unknown").replace(' ','_').replace('/','_')
-                archive_filename = f"{phase}_{safe_cmd}_{check.id}.txt"
-                zip_file.writestr(archive_filename, content)
-                
-            # If 'all', also add diff and report
-            if type == 'all':
+            elif type == 'all':
+                # Add job report at root
                 zip_file.writestr("job_report.txt", job.log)
-                # Try to add Diff file
-                log_dir = f"logs/{job.device.id if job.device else 'unknown'}/{job.id}/"
-                import os
-                diff_path = os.path.join(log_dir, 'diffs', 'diff_summary.txt')
-                if os.path.exists(diff_path):
-                     with open(diff_path, 'r') as f:
-                         zip_file.writestr("diff_summary.txt", f.read())
+                
+                # Add precheck folder
+                precheck_dir = os.path.join(log_dir, 'precheck')
+                if os.path.exists(precheck_dir):
+                    for root, dirs, files in os.walk(precheck_dir):
+                        for file in files:
+                            file_path = os.path.join(root, file)
+                            arcname = os.path.relpath(file_path, log_dir)
+                            zip_file.write(file_path, arcname)
+                
+                # Add postcheck folder
+                postcheck_dir = os.path.join(log_dir, 'postcheck')
+                if os.path.exists(postcheck_dir):
+                    for root, dirs, files in os.walk(postcheck_dir):
+                        for file in files:
+                            file_path = os.path.join(root, file)
+                            arcname = os.path.relpath(file_path, log_dir)
+                            zip_file.write(file_path, arcname)
+                
+                # Add diffs folder
+                diffs_dir = os.path.join(log_dir, 'diffs')
+                if os.path.exists(diffs_dir):
+                    for root, dirs, files in os.walk(diffs_dir):
+                        for file in files:
+                            file_path = os.path.join(root, file)
+                            arcname = os.path.relpath(file_path, log_dir)
+                            zip_file.write(file_path, arcname)
+                
+                # Add diff_summary.txt if it exists at root of log_dir
+                diff_summary = os.path.join(log_dir, 'diff_summary.txt')
+                if os.path.exists(diff_summary):
+                    zip_file.write(diff_summary, 'diff_summary.txt')
         
         buffer.seek(0)
         response = HttpResponse(buffer, content_type='application/zip')

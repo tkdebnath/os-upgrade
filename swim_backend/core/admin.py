@@ -3,13 +3,55 @@ from django.utils.html import format_html
 from django.urls import reverse
 from django.utils.safestring import mark_safe
 import json
-from .models import Job, ActivityLog
+from .models import Job, ActivityLog, Workflow, WorkflowStep, ValidationCheck, CheckRun, APIToken
 
 @admin.register(Job)
 class JobAdmin(admin.ModelAdmin):
-    list_display = ('id', 'device', 'status', 'created_at')
-    list_filter = ('status', 'created_at')
+    list_display = ('id', 'device', 'workflow', 'status', 'created_at', 'updated_at')
+    list_filter = ('status', 'workflow', 'created_at')
     readonly_fields = ('log', 'created_at', 'updated_at')
+    search_fields = ('device__hostname', 'device__ip_address')
+
+@admin.register(Workflow)
+class WorkflowAdmin(admin.ModelAdmin):
+    list_display = ('name', 'description', 'is_default')
+    list_filter = ('is_default',)
+    search_fields = ('name', 'description')
+
+@admin.register(WorkflowStep)
+class WorkflowStepAdmin(admin.ModelAdmin):
+    list_display = ('workflow', 'name', 'step_type', 'order')
+    list_filter = ('workflow', 'step_type')
+    search_fields = ('workflow__name', 'name')
+
+@admin.register(ValidationCheck)
+class ValidationCheckAdmin(admin.ModelAdmin):
+    list_display = ('name', 'category', 'check_type', 'command')
+    list_filter = ('category', 'check_type', 'is_default')
+    search_fields = ('name', 'command', 'description')
+
+@admin.register(CheckRun)
+class CheckRunAdmin(admin.ModelAdmin):
+    list_display = ('job', 'validation_check', 'device', 'status', 'created_at')
+    list_filter = ('status', 'validation_check__category', 'created_at')
+    readonly_fields = ('job', 'validation_check', 'device', 'output', 'created_at')
+    search_fields = ('job__device__hostname', 'validation_check__name')
+
+@admin.register(APIToken)
+class APITokenAdmin(admin.ModelAdmin):
+    list_display = ('user', 'key_preview', 'write_enabled', 'created', 'last_used', 'is_expired')
+    list_filter = ('write_enabled', 'created')
+    readonly_fields = ('key', 'created', 'last_used')
+    search_fields = ('user__username', 'description')
+    
+    def key_preview(self, obj):
+        return f"{obj.key[:8]}..." if obj.key else "—"
+    key_preview.short_description = 'Key Preview'
+    
+    def is_expired(self, obj):
+        return obj.is_expired
+    is_expired.boolean = True
+    is_expired.short_description = 'Expired'
 
 
 @admin.register(ActivityLog)

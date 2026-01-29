@@ -35,6 +35,7 @@ INSTALLED_APPS = [
     'drf_spectacular',
     'corsheaders',
     'django_extensions',
+    'django_filters',
     
     # Local
     'swim_backend.core',
@@ -59,7 +60,7 @@ ROOT_URLCONF = 'swim_backend.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS': [BASE_DIR / 'swim_backend' / 'templates'],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
