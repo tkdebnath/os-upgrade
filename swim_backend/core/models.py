@@ -2,6 +2,46 @@ from django.db import models
 from swim_backend.devices.models import Device
 from swim_backend.devices.models import Device
 from swim_backend.images.models import Image, FileServer
+from swim_backend.core.rbac_models import PermissionBundle
+# APIToken is defined below
+
+class APIToken(models.Model):
+    """API Token for user authentication"""
+    from django.contrib.auth.models import User
+    import secrets
+    import string
+    
+    def generate_token():
+        """Generate a secure random token (40 characters)"""
+        import secrets
+        import string
+        alphabet = string.ascii_letters + string.digits
+        return ''.join(secrets.choice(alphabet) for _ in range(40))
+    
+    user = models.ForeignKey('auth.User', on_delete=models.CASCADE, related_name='api_tokens')
+    key = models.CharField(max_length=100, unique=True, default=generate_token)
+    write_enabled = models.BooleanField(default=True, help_text='Permit create/update/delete operations using this key')
+    expires = models.DateTimeField(null=True, blank=True, help_text='Token expiration date/time (optional)')
+    description = models.CharField(max_length=255, blank=True)
+    allowed_ips = models.TextField(blank=True, help_text='Allowed IPv4/IPv6 networks (comma-separated)')
+    created = models.DateTimeField(auto_now_add=True)
+    last_used = models.DateTimeField(null=True, blank=True)
+    
+    class Meta:
+        ordering = ['-created']
+        verbose_name = 'API Token'
+        verbose_name_plural = 'API Tokens'
+    
+    def __str__(self):
+        return f"{self.user.username} - {self.key[:8]}..."
+    
+    @property
+    def is_expired(self):
+        """Check if token is expired"""
+        if not self.expires:
+            return False
+        from django.utils import timezone
+        return timezone.now() > self.expires
 
 class Workflow(models.Model):
     name = models.CharField(max_length=100)
@@ -121,3 +161,39 @@ class CheckRun(models.Model):
 
     def __str__(self):
         return f"CheckRun: {self.validation_check.name} on {self.device.hostname}"
+
+
+class ActivityLog(models.Model):
+    """Track all user actions for audit purposes"""
+    ACTION_CHOICES = [
+        ('create', 'Create'),
+        ('update', 'Update'),
+        ('delete', 'Delete'),
+        ('login', 'Login'),
+        ('logout', 'Logout'),
+        ('view', 'View'),
+    ]
+    
+    user = models.ForeignKey('auth.User', on_delete=models.SET_NULL, null=True, related_name='activity_logs')
+    action = models.CharField(max_length=20, choices=ACTION_CHOICES)
+    content_type = models.ForeignKey('contenttypes.ContentType', on_delete=models.SET_NULL, null=True, blank=True)
+    object_id = models.PositiveIntegerField(null=True, blank=True)
+    object_repr = models.CharField(max_length=255, blank=True, help_text='String representation of the object')
+    changes = models.JSONField(null=True, blank=True, help_text='Field changes for updates')
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.TextField(blank=True)
+    timestamp = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['-timestamp']
+        verbose_name = 'Activity Log'
+        verbose_name_plural = 'Activity Logs'
+        indexes = [
+            models.Index(fields=['-timestamp']),
+            models.Index(fields=['user', '-timestamp']),
+            models.Index(fields=['action', '-timestamp']),
+        ]
+    
+    def __str__(self):
+        user_name = self.user.username if self.user else 'Unknown'
+        return f"{user_name} - {self.action} - {self.object_repr or 'N/A'} - {self.timestamp.strftime('%Y-%m-%d %H:%M')}"

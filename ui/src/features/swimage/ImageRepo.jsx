@@ -125,7 +125,8 @@ const ImageRepo = () => {
                             <th className="py-2 px-3">Filename</th>
                             <th className="py-2 px-3">Version</th>
                             <th className="py-2 px-3">Size</th>
-                            <th className="py-2 px-3">Location</th>
+                            <th className="py-2 px-3">File Server</th>
+                            <th className="py-2 px-3">Remote Path</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -135,12 +136,25 @@ const ImageRepo = () => {
                                 <td className="py-2 px-3">{img.version}</td>
                                 <td className="py-2 px-3 text-gray-500">{(img.size_bytes / 1024 / 1024).toFixed(1)} MB</td>
                                 <td className="py-2 px-3 text-gray-500">
-                                    {img.is_remote ? (
+                                    {img.file_server ? (
                                         <span className="flex items-center">
-                                            <Server size={12} className="mr-1" />
-                                            {fileServers.find(fs => fs.id === img.file_server)?.name || 'Remote'}
+                                            <Server size={12} className="mr-1 text-blue-500" />
+                                            {fileServers.find(fs => fs.id === img.file_server)?.name || 'Remote Server'}
                                         </span>
-                                    ) : 'Local Storage'}
+                                    ) : img.is_remote ? (
+                                        <span className="flex items-center text-orange-500">
+                                            <Server size={12} className="mr-1" />
+                                            Remote (No Server Assigned)
+                                        </span>
+                                    ) : (
+                                        <span className="flex items-center text-gray-400">
+                                            <Server size={12} className="mr-1" />
+                                            Not Configured
+                                        </span>
+                                    )}
+                                </td>
+                                <td className="py-2 px-3 font-mono text-xs text-gray-500">
+                                    {img.remote_path || <span className="text-gray-400 italic">-</span>}
                                 </td>
                             </tr>
                         ))}

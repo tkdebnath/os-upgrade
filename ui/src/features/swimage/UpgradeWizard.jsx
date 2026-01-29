@@ -104,7 +104,10 @@ const UpgradeWizard = () => {
     const runChecks = async () => {
         setChecking(true);
         try {
-            const res = await axios.post('/api/devices/check_readiness/', { ids: selectedDevices });
+            const res = await axios.post('/api/devices/check_readiness/', { 
+                ids: selectedDevices,
+                image_map: imageSelection
+            });
             setReadinessResults(res.data);
         } catch (error) {
             console.error("Check failed", error);
@@ -169,12 +172,12 @@ const UpgradeWizard = () => {
                     <div className="w-8 h-px bg-gray-300"></div>
                     <div className={`flex items-center ${step >= 3 ? 'text-blue-600 font-bold' : 'text-gray-400'}`}>
                         <span className={`w-6 h-6 rounded-full flex items-center justify-center border mr-2 ${step >= 3 ? 'bg-blue-600 text-white border-blue-600' : 'border-gray-300'}`}>3</span>
-                        Readiness
+                        Image
                     </div>
                     <div className="w-8 h-px bg-gray-300"></div>
                     <div className={`flex items-center ${step >= 4 ? 'text-blue-600 font-bold' : 'text-gray-400'}`}>
                         <span className={`w-6 h-6 rounded-full flex items-center justify-center border mr-2 ${step >= 4 ? 'bg-blue-600 text-white border-blue-600' : 'border-gray-300'}`}>4</span>
-                        Image
+                        Readiness
                     </div>
                     <div className="w-8 h-px bg-gray-300"></div>
                     <div className={`flex items-center ${step >= 5 ? 'text-blue-600 font-bold' : 'text-gray-400'}`}>
@@ -282,75 +285,17 @@ const UpgradeWizard = () => {
                                     return;
                                 }
                                 setStep(3);
-                                runChecks();
                             }}
                             className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 flex items-center"
                         >
-                            Next: Readiness Checks <ArrowRight size={16} className="ml-2" />
+                            Next: Image Selection <ArrowRight size={16} className="ml-2" />
                         </button>
                     </div>
                 </div>
             )}
 
-            {/* Step 3 (Old Step 2): Readiness Checks */}
+            {/* Step 3: Image Selection */}
             {step === 3 && (
-                <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-                    <div className="p-4 border-b border-gray-200 bg-gray-50">
-                        <h2 className="font-semibold text-gray-700">Pre-Upgrade Checks</h2>
-                        <p className="text-xs text-gray-500 mt-1">Verifying device reachability, flash space, and configuration compliance.</p>
-                    </div>
-
-                    {checking ? (
-                        <div className="p-12 text-center text-gray-500">
-                            <Loader size={32} className="animate-spin mx-auto mb-4 text-blue-500" />
-                            <p>Running checks on {deviceDetails.length} devices...</p>
-                        </div>
-                    ) : (
-                        <div className="p-4 space-y-4">
-                            {readinessResults.map(res => (
-                                <div key={res.id} className="border border-gray-200 rounded p-4">
-                                    <div className="flex items-center justify-between mb-2">
-                                        <div className="font-bold text-gray-800 flex items-center">
-                                            {res.hostname}
-                                            <span className={`ml-3 px-2 py-0.5 rounded text-xs uppercase ${res.status === 'Ready' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                                                {res.status}
-                                            </span>
-                                        </div>
-                                        <div className="text-xs text-gray-500 font-mono">Target: {res.target_version || 'N/A'}</div>
-                                    </div>
-                                    <div className="grid grid-cols-1 md:grid-cols-4 gap-2 text-sm">
-                                        {res.checks.map((check, i) => (
-                                            <div key={i} className={`flex items-center p-2 rounded ${check.status === 'Pass' ? 'bg-green-50 text-green-700' : check.status === 'Warning' ? 'bg-orange-50 text-orange-700' : 'bg-red-50 text-red-700'}`}>
-                                                {check.status === 'Pass' ? <CheckCircle size={14} className="mr-2" /> : <AlertTriangle size={14} className="mr-2" />}
-                                                <div>
-                                                    <div className="font-semibold text-xs">{check.name}</div>
-                                                    <div className="text-[10px] opacity-80">{check.message}</div>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    )}
-
-                    <div className="p-4 border-t border-gray-200 flex justify-between items-center">
-                        <button onClick={() => setStep(2)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded flex items-center">
-                            <ArrowLeft size={16} className="mr-2" /> Back
-                        </button>
-                        <button
-                            onClick={() => setStep(4)}
-                            disabled={checking || !allReady}
-                            className={`px-4 py-2 text-white rounded flex items-center ${allReady ? 'bg-blue-600 hover:bg-blue-700' : 'bg-gray-300 cursor-not-allowed'}`}
-                        >
-                            Next: Distribute Image <ArrowRight size={16} className="ml-2" />
-                        </button>
-                    </div>
-                </div>
-            )}
-
-            {/* Step 4: Image Selection */}
-            {step === 4 && (
                 <div className="bg-white rounded-lg shadow-sm border border-gray-200">
                     <div className="p-4 border-b border-gray-200 bg-gray-50">
                         <h2 className="font-semibold text-gray-700">Image Selection</h2>
@@ -370,10 +315,6 @@ const UpgradeWizard = () => {
                                     {deviceDetails.map(d => {
                                         const available = d.golden_image?.available_images || [];
                                         const defaultImg = available.find(i => i.tag === 'Default') || { id: 'legacy', file: d.golden_image?.file || 'None', version: d.golden_image?.version };
-
-                                        // Initialize selection if not set (UX improvement: auto-select default)
-                                        // But we rely on backend auto-assign if checks fail.
-                                        // Here we just override.
 
                                         return (
                                             <tr key={d.id} className="hover:bg-gray-50">
@@ -407,12 +348,81 @@ const UpgradeWizard = () => {
                         </div>
                     </div>
                     <div className="p-4 border-t border-gray-200 flex justify-between items-center">
+                        <button onClick={() => setStep(2)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded flex items-center">
+                            <ArrowLeft size={16} className="mr-2" /> Back
+                        </button>
+                        <button
+                            onClick={() => {
+                                setStep(4);
+                                runChecks();
+                            }}
+                            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 flex items-center shadow-sm"
+                        >
+                            Next: Readiness Checks <ArrowRight size={16} className="ml-2" />
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            {/* Step 4: Readiness Checks */}
+            {step === 4 && (
+                <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+                    <div className="p-4 border-b border-gray-200 bg-gray-50">
+                        <h2 className="font-semibold text-gray-700">Pre-Upgrade Checks</h2>
+                        <p className="text-xs text-gray-500 mt-1">Verifying device reachability, flash space, and configuration compliance.</p>
+                    </div>
+
+                    {checking ? (
+                        <div className="p-12 text-center text-gray-500">
+                            <Loader size={32} className="animate-spin mx-auto mb-4 text-blue-500" />
+                            <p>Running checks on {deviceDetails.length} devices...</p>
+                        </div>
+                    ) : (
+                        <div className="p-4 space-y-4">
+                            {readinessResults.map(res => (
+                                <div key={res.id} className="border border-gray-200 rounded p-4">
+                                    <div className="flex items-center justify-between mb-2">
+                                        <div className="font-bold text-gray-800 flex items-center">
+                                            {res.hostname}
+                                            <span className={`ml-3 px-2 py-0.5 rounded text-xs uppercase ${res.status === 'Ready' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                                {res.status}
+                                            </span>
+                                        </div>
+                                        <div className="text-right">
+                                            <div className="text-xs text-gray-500 font-mono">
+                                                Target: {res.target_version || 'N/A'}
+                                            </div>
+                                            {res.target_image_file && (
+                                                <div className="text-xs text-gray-400 font-mono">
+                                                    {res.target_image_file} ({(res.target_image_size / 1024 / 1024).toFixed(0)} MB)
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                    <div className="grid grid-cols-1 md:grid-cols-4 gap-2 text-sm">
+                                        {res.checks.map((check, i) => (
+                                            <div key={i} className={`flex items-center p-2 rounded ${check.status === 'Pass' ? 'bg-green-50 text-green-700' : check.status === 'Warning' ? 'bg-orange-50 text-orange-700' : 'bg-red-50 text-red-700'}`}>
+                                                {check.status === 'Pass' ? <CheckCircle size={14} className="mr-2" /> : <AlertTriangle size={14} className="mr-2" />}
+                                                <div>
+                                                    <div className="font-semibold text-xs">{check.name}</div>
+                                                    <div className="text-[10px] opacity-80">{check.message}</div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
+                    <div className="p-4 border-t border-gray-200 flex justify-between items-center">
                         <button onClick={() => setStep(3)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded flex items-center">
                             <ArrowLeft size={16} className="mr-2" /> Back
                         </button>
                         <button
                             onClick={() => setStep(5)}
-                            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 flex items-center shadow-sm"
+                            disabled={checking || !allReady}
+                            className={`px-4 py-2 text-white rounded flex items-center ${allReady ? 'bg-blue-600 hover:bg-blue-700' : 'bg-gray-300 cursor-not-allowed'}`}
                         >
                             Next: Distribution <ArrowRight size={16} className="ml-2" />
                         </button>
@@ -480,7 +490,7 @@ const UpgradeWizard = () => {
                                 disabled={distributing}
                                 className={`mt-4 px-4 py-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded flex items-center text-sm ${distributing ? 'opacity-50 cursor-not-allowed' : ''}`}
                             >
-                                <ArrowLeft size={14} className="mr-2" /> Back to Image
+                                <ArrowLeft size={14} className="mr-2" /> Back to Readiness
                             </button>
                         </div>
 

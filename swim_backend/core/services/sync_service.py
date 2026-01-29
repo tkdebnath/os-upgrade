@@ -57,7 +57,7 @@ def sync_device_details(device_id):
                version = output['version']
            
                # Platform usually holds the chassis info in Genie
-               hardware_model = output.get('platform', 'unknown')
+               hardware_model = output.get('pid', 'unknown')
            
            print(output)
 

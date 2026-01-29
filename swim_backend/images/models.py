@@ -1,5 +1,4 @@
 from django.db import models
-from rest_framework import serializers, viewsets
 import os
 import hashlib
 
@@ -27,11 +26,11 @@ def image_upload_path(instance, filename):
     return f'images/{filename}'
 
 class Image(models.Model):
-    filename = models.CharField(max_length=255, unique=True)
+    filename = models.CharField(max_length=255)  # Removed unique=True - same filename allowed for different models
     version = models.CharField(max_length=50)
     file = models.FileField(upload_to=image_upload_path, blank=True, null=True)
-    size_bytes = models.BigIntegerField(editable=False, default=0)
-    md5_checksum = models.CharField(max_length=32, blank=True, null=True, editable=False)
+    size_bytes = models.BigIntegerField(default=0)
+    md5_checksum = models.CharField(max_length=32, blank=True, null=True)
     uploaded_at = models.DateTimeField(auto_now_add=True)
 
     # Remote Image Fields
@@ -56,13 +55,3 @@ class Image(models.Model):
 
     def __str__(self):
         return self.filename
-
-class ImageSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Image
-        fields = '__all__'
-        read_only_fields = ('size_bytes', 'md5_checksum', 'uploaded_at', 'filename')
-
-class ImageViewSet(viewsets.ModelViewSet):
-    queryset = Image.objects.all()
-    serializer_class = ImageSerializer

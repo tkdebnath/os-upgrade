@@ -1,0 +1,59 @@
+/* Custom Admin Styles to match frontend theme */
+
+/* Dark sidebar matching frontend */
+.bg-primary-600 {
+    background-color: rgb(31 41 55) !important; /* gray-800 matching frontend sidebar */
+}
+
+.bg-primary-700 {
+    background-color: rgb(17 24 39) !important; /* darker gray */
+}
+
+/* Sidebar text colors */
+.text-white {
+    color: rgb(229 231 235) !important; /* gray-200 */
+}
+
+/* Active/hover states */
+[data-theme-color="primary"] .bg-primary-600:hover {
+    background-color: rgb(55 65 81) !important; /* gray-700 */
+}
+
+/* Button primary colors - matching frontend blue */
+.bg-primary-600.text-white {
+    background-color: rgb(37 99 235) !important; /* blue-600 */
+}
+
+.bg-primary-600.text-white:hover {
+    background-color: rgb(29 78 216) !important; /* blue-700 */
+}
+
+/* Header styling */
+.bg-white.dark\:bg-gray-900 {
+    border-bottom: 1px solid rgb(229 231 235) !important;
+}
+
+/* Card backgrounds */
+.bg-white {
+    box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1) !important;
+}
+
+/* Navigation items */
+nav a {
+    transition: all 0.15s ease-in-out;
+}
+
+/* Success states */
+.text-green-600 {
+    color: rgb(22 163 74) !important;
+}
+
+/* Warning states */
+.text-orange-600 {
+    color: rgb(234 88 12) !important;
+}
+
+/* Sidebar navigation active state */
+.bg-primary-700 {
+    background-color: rgb(37 99 235) !important; /* blue-600 for active items */
+}

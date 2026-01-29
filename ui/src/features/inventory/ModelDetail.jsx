@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import axios from 'axios';
-import { ArrowLeft, Server, AlertCircle, CheckCircle, Upload, Trash, Star, HardDrive, Plus, X } from 'lucide-react';
+import { ArrowLeft, Server, AlertCircle, CheckCircle, Upload, Trash, Star, HardDrive, Plus, X, Edit2 } from 'lucide-react';
 
 const ModelDetail = () => {
     const { id } = useParams(); // id is the model name
@@ -17,6 +17,15 @@ const ModelDetail = () => {
     // Add Image Form State
     const [showAddForm, setShowAddForm] = useState(false);
     const [newImage, setNewImage] = useState({
+        version: '',
+        filename: '',
+        size_bytes: '',
+        md5_checksum: ''
+    });
+
+    // Edit Image State
+    const [editingImage, setEditingImage] = useState(null);
+    const [editForm, setEditForm] = useState({
         version: '',
         filename: '',
         size_bytes: '',
@@ -106,6 +115,34 @@ const ModelDetail = () => {
             console.error(error);
             alert("Failed to remove image.");
         }
+    };
+
+    const handleUpdateImage = async (e) => {
+        e.preventDefault();
+        try {
+            await axios.patch(`/api/images/${editingImage}/`, {
+                version: editForm.version,
+                filename: editForm.filename,
+                size_bytes: parseInt(editForm.size_bytes),
+                md5_checksum: editForm.md5_checksum
+            });
+            setEditingImage(null);
+            fetchData();
+            alert("Image updated successfully");
+        } catch (error) {
+            console.error(error);
+            alert("Failed to update image. Ensure filename is unique.");
+        }
+    };
+
+    const startEditImage = (img) => {
+        setEditingImage(img.id);
+        setEditForm({
+            version: img.version,
+            filename: img.filename,
+            size_bytes: img.size_bytes,
+            md5_checksum: img.md5_checksum || ''
+        });
     };
 
     const handleUpdatePath = async () => {
@@ -298,44 +335,114 @@ const ModelDetail = () => {
                                     <th className="p-3">Version</th>
                                     <th className="p-3">Filename</th>
                                     <th className="p-3">Size</th>
+                                    <th className="p-3">MD5 Checksum</th>
                                     <th className="p-3 text-right">Actions</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100">
                                 {model?.supported_images_details?.length > 0 ? (
                                     model.supported_images_details.map(img => (
-                                        <tr key={img.id} className="hover:bg-gray-50">
-                                            <td className="p-3 font-medium text-gray-800">
-                                                {img.version}
-                                                {model.default_image === img.id && (
-                                                    <span className="ml-2 px-2 py-0.5 bg-yellow-100 text-yellow-700 text-xs rounded-full font-bold">Default</span>
-                                                )}
-                                            </td>
-                                            <td className="p-3 text-gray-600 font-mono text-xs">{img.filename}</td>
-                                            <td className="p-3 text-gray-500">{(img.size_bytes / (1024 * 1024)).toFixed(2)} MB</td>
-                                            <td className="p-3 text-right flex justify-end space-x-2">
-                                                {model.default_image !== img.id && (
-                                                    <button
-                                                        onClick={() => handleSetDefault(img.id)}
-                                                        className="text-yellow-600 hover:text-yellow-700 text-xs font-semibold flex items-center"
-                                                        title="Set as Default (Golden)"
-                                                    >
-                                                        <Star size={14} className="mr-1" /> Make Golden
-                                                    </button>
-                                                )}
-                                                <button
-                                                    onClick={() => handleRemoveSupported(img.id)}
-                                                    className="text-red-400 hover:text-red-600"
-                                                    title="Remove"
-                                                >
-                                                    <Trash size={14} />
-                                                </button>
-                                            </td>
-                                        </tr>
+                                        <React.Fragment key={img.id}>
+                                            {editingImage === img.id ? (
+                                                <tr className="bg-blue-50">
+                                                    <td colSpan="5" className="p-4">
+                                                        <form onSubmit={handleUpdateImage} className="space-y-3">
+                                                            <div className="grid grid-cols-4 gap-4">
+                                                                <div>
+                                                                    <label className="block text-xs font-bold text-gray-600 mb-1">Version</label>
+                                                                    <input
+                                                                        required
+                                                                        className="w-full border rounded p-1.5 text-sm"
+                                                                        value={editForm.version}
+                                                                        onChange={e => setEditForm({ ...editForm, version: e.target.value })}
+                                                                    />
+                                                                </div>
+                                                                <div>
+                                                                    <label className="block text-xs font-bold text-gray-600 mb-1">Filename</label>
+                                                                    <input
+                                                                        required
+                                                                        className="w-full border rounded p-1.5 text-sm"
+                                                                        value={editForm.filename}
+                                                                        onChange={e => setEditForm({ ...editForm, filename: e.target.value })}
+                                                                    />
+                                                                </div>
+                                                                <div>
+                                                                    <label className="block text-xs font-bold text-gray-600 mb-1">Size (Bytes)</label>
+                                                                    <input
+                                                                        required
+                                                                        type="number"
+                                                                        className="w-full border rounded p-1.5 text-sm"
+                                                                        value={editForm.size_bytes}
+                                                                        onChange={e => setEditForm({ ...editForm, size_bytes: e.target.value })}
+                                                                    />
+                                                                </div>
+                                                                <div>
+                                                                    <label className="block text-xs font-bold text-gray-600 mb-1">MD5 Checksum</label>
+                                                                    <input
+                                                                        className="w-full border rounded p-1.5 text-sm font-mono"
+                                                                        value={editForm.md5_checksum}
+                                                                        onChange={e => setEditForm({ ...editForm, md5_checksum: e.target.value })}
+                                                                    />
+                                                                </div>
+                                                            </div>
+                                                            <div className="flex space-x-2">
+                                                                <button type="submit" className="px-4 py-1.5 bg-green-600 text-white rounded text-xs font-bold hover:bg-green-700">
+                                                                    Save Changes
+                                                                </button>
+                                                                <button 
+                                                                    type="button" 
+                                                                    onClick={() => setEditingImage(null)}
+                                                                    className="px-4 py-1.5 bg-gray-200 text-gray-600 rounded text-xs font-bold hover:bg-gray-300"
+                                                                >
+                                                                    Cancel
+                                                                </button>
+                                                            </div>
+                                                        </form>
+                                                    </td>
+                                                </tr>
+                                            ) : (
+                                                <tr className="hover:bg-gray-50">
+                                                    <td className="p-3 font-medium text-gray-800">
+                                                        {img.version}
+                                                        {model.default_image === img.id && (
+                                                            <span className="ml-2 px-2 py-0.5 bg-yellow-100 text-yellow-700 text-xs rounded-full font-bold">Default</span>
+                                                        )}
+                                                    </td>
+                                                    <td className="p-3 text-gray-600 font-mono text-xs">{img.filename}</td>
+                                                    <td className="p-3 text-gray-500">{img.size_bytes > 0 ? (img.size_bytes / (1024 * 1024)).toFixed(2) + ' MB' : 'N/A'}</td>
+                                                    <td className="p-3 text-gray-400 font-mono text-xs truncate max-w-xs" title={img.md5_checksum}>{img.md5_checksum || 'N/A'}</td>
+                                                    <td className="p-3 text-right flex justify-end space-x-2">
+                                                        <button
+                                                            onClick={() => startEditImage(img)}
+                                                            className="text-blue-600 hover:text-blue-700"
+                                                            title="Edit Image"
+                                                        >
+                                                            <Edit2 size={14} />
+                                                        </button>
+                                                        {model.default_image !== img.id && (
+                                                            <button
+                                                                onClick={() => handleSetDefault(img.id)}
+                                                                className="text-yellow-600 hover:text-yellow-700 text-xs font-semibold flex items-center"
+                                                                title="Set as Default (Golden)"
+                                                            >
+                                                                <Star size={14} className="mr-1" /> Make Golden
+                                                            </button>
+                                                        )}
+                                                        <button
+                                                            onClick={() => handleRemoveSupported(img.id)}
+                                                            className="text-red-400 hover:text-red-600"
+                                                            title="Remove"
+                                                        >
+                                                            <Trash size={14} />
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            )}
+                                        </React.Fragment>
                                     ))
                                 ) : (
                                     <tr>
-                                        <td colSpan="4" className="p-8 text-center text-gray-400 italic">No supported images added yet.</td>
+                                        <td colSpan="5" className="p-8 text-center text-gray-400 italic">No supported images added yet.</td>
                                     </tr>
                                 )}
                             </tbody>

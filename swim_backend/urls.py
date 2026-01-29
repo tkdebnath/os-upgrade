@@ -6,7 +6,9 @@ from django.conf.urls.static import static
 from swim_backend.api_router import router
 
 def dashboard_callback(request, context):
-    return {}
+    from django.contrib.admin.models import LogEntry
+    context['log_entries'] = LogEntry.objects.select_related('content_type', 'user')[:10]
+    return context
 
 from rest_framework.schemas import get_schema_view
 

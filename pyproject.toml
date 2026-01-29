@@ -3,7 +3,7 @@ name = "swim"
 version = "0.1.0"
 description = "Campus Software Image Management (SWIM)"
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.12"
 dependencies = [
     "django>=5.0.0",
     "djangorestframework>=3.14.0",

@@ -5,6 +5,9 @@ class CoreConfig(AppConfig):
     name = 'swim_backend.core'
 
     def ready(self):
+        # Import activity logger signals
+        import swim_backend.core.activity_logger
+        
         # We need to avoid running this during migrations or if autoreload mimics double run
         import os
         if os.environ.get('RUN_MAIN', None) != 'true':

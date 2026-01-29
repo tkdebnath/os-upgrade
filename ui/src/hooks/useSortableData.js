@@ -43,5 +43,5 @@ export const useSortableData = (items, config = null) => {
         setSortConfig({ key, direction });
     };
 
-    return { items: sortedItems, requestSort, sortConfig };
+    return { sortedData: sortedItems, items: sortedItems, requestSort, sortConfig };
 };

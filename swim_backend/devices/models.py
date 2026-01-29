@@ -76,9 +76,14 @@ class Device(models.Model):
     
     site = models.ForeignKey(Site, on_delete=models.SET_NULL, null=True, blank=True, related_name='devices')
     
-    def __str__(self):
-        return self.hostname
-
+    class Meta:
+        ordering = ['hostname']
+        permissions = [
+            ("can_sync_device", "Can sync device inventory"),
+            ("can_upgrade_device", "Can upgrade device firmware"),
+            ("can_check_readiness", "Can check device readiness"),
+        ]
+    
     def __str__(self):
         return self.hostname
 

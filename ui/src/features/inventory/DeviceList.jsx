@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { Search, Plus, RefreshCw, Server, Filter, ChevronDown, CheckCircle, AlertCircle, HardDrive } from 'lucide-react';
+import { Search, Plus, RefreshCw, Server, Filter, ChevronDown, CheckCircle, AlertCircle, HardDrive, Settings } from 'lucide-react';
 import ImportManager from './ImportManager';
 import AddDeviceModal from './AddDeviceModal';
 import ConfirmModal from './ConfirmModal';
+import TableConfigModal from './TableConfigModal';
 import { useSortableData } from '../../hooks/useSortableData';
 import SortableHeader from '../../components/SortableHeader';
 
@@ -15,6 +16,7 @@ const Devices = () => {
     const [focusMode, setFocusMode] = useState('Default'); // Default, Software Images
     const [showFocusMenu, setShowFocusMenu] = useState(false);
     const [showAddModal, setShowAddModal] = useState(false);
+    const [showConfigModal, setShowConfigModal] = useState(false);
 
     // Confirm Modal State
     const [confirmModalData, setConfirmModalData] = useState(null);
@@ -31,6 +33,62 @@ const Devices = () => {
 
     // New State for Selection
     const [selectedDevices, setSelectedDevices] = useState(new Set());
+
+    // Define all possible columns
+    const allColumns = [
+        { key: 'hostname', label: 'Device Name', sortKey: 'hostname', required: true },
+        { key: 'ip_address', label: 'IP Address', sortKey: 'ip_address' },
+        { key: 'site', label: 'Site', sortKey: 'site' },
+        { key: 'model', label: 'Model', sortKey: 'model' },
+        { key: 'family', label: 'Device Family', sortKey: 'family' },
+        { key: 'platform', label: 'Platform', sortKey: 'platform' },
+        { key: 'version', label: 'Image Version', sortKey: 'version' },
+        { key: 'last_sync', label: 'Last Sync', sortKey: 'last_sync_time' },
+        { key: 'reachability', label: 'Reachability', sortKey: 'reachability' },
+        { key: 'compliance', label: 'Compliance', sortKey: 'compliance_status' },
+        { key: 'boot_method', label: 'Boot Method', sortKey: 'boot_method' },
+        { key: 'mac_address', label: 'MAC Address', sortKey: 'mac_address' },
+    ];
+
+    // Focus mode presets - define which columns to show for each focus
+    const focusPresets = {
+        'Default': ['hostname', 'ip_address', 'site', 'model', 'family', 'last_sync', 'reachability', 'compliance'],
+        'Software Images': ['hostname', 'ip_address', 'site', 'model', 'version', 'boot_method', 'last_sync', 'compliance'],
+        'Provision': ['hostname', 'ip_address', 'mac_address', 'site', 'model', 'platform', 'reachability', 'family']
+    };
+
+    // Load selected columns from localStorage or use defaults
+    const getDefaultColumns = () => {
+        const saved = localStorage.getItem('deviceTableColumns');
+        if (saved) {
+            try {
+                return JSON.parse(saved);
+            } catch (e) {
+                console.error('Failed to parse saved columns', e);
+            }
+        }
+        // Default columns based on current focus mode
+        const presetKeys = focusPresets['Default'];
+        return allColumns.filter(col => presetKeys.includes(col.key));
+    };
+
+    const [selectedColumns, setSelectedColumns] = useState(getDefaultColumns());
+
+    const saveColumnConfig = (columns) => {
+        setSelectedColumns(columns);
+        localStorage.setItem('deviceTableColumns', JSON.stringify(columns));
+    };
+
+    // Apply focus mode preset
+    const applyFocusPreset = (mode) => {
+        const presetKeys = focusPresets[mode];
+        if (presetKeys) {
+            const presetColumns = allColumns.filter(col => presetKeys.includes(col.key));
+            saveColumnConfig(presetColumns);
+        }
+        setFocusMode(mode);
+        setShowFocusMenu(false);
+    };
 
     const toggleFilter = (filter) => {
         const newFilters = new Set(selectedFilters);
@@ -194,6 +252,131 @@ const Devices = () => {
         navigate('/upgrade', { state: { selectedDevices: Array.from(selectedDevices) } });
     };
 
+    // Render cell based on column key
+    const renderCell = (dev, column) => {
+        switch (column.key) {
+            case 'hostname':
+                return (
+                    <td key={column.key} className="p-4 font-semibold text-blue-600 group-hover:underline cursor-pointer flex items-center">
+                        <Server size={16} className="mr-2 text-gray-400 group-hover:text-blue-500" />
+                        <Link to={`/devices/${dev.id}`} className="hover:underline">
+                            {dev.hostname}
+                        </Link>
+                    </td>
+                );
+            case 'ip_address':
+                return <td key={column.key} className="p-4 text-gray-600 font-mono text-xs">{dev.ip_address}</td>;
+            case 'site':
+                return (
+                    <td key={column.key} className="p-4 text-gray-600">
+                        <Link
+                            to={`/sites/${dev.site || 'Global'}`}
+                            className="hover:text-blue-600 hover:underline text-left block"
+                        >
+                            {dev.site || 'Global'}
+                        </Link>
+                    </td>
+                );
+            case 'model':
+                return (
+                    <td key={column.key} className="p-4 text-gray-600 font-medium">
+                        {dev.model ? (
+                            <Link to={`/models/${dev.model}`} className="hover:text-blue-600 hover:underline">
+                                {dev.model}
+                            </Link>
+                        ) : '-'}
+                    </td>
+                );
+            case 'family':
+                return <td key={column.key} className="p-4 text-gray-600">{dev.family || 'Switch'}</td>;
+            case 'platform':
+                return <td key={column.key} className="p-4 text-gray-600">{dev.platform || '-'}</td>;
+            case 'version':
+                return <td key={column.key} className="p-4 text-gray-600">{dev.version || '-'}</td>;
+            case 'last_sync':
+                return (
+                    <td key={column.key} className="p-4">
+                        <div className="flex flex-col">
+                            <span className={`text-xs font-bold ${
+                                dev.last_sync_status === 'Completed' ? 'text-green-600' :
+                                dev.last_sync_status === 'Failed' ? 'text-red-500' :
+                                dev.last_sync_status === 'In Progress' ? 'text-blue-500' : 'text-gray-400'
+                            }`}>
+                                {dev.last_sync_status || 'Pending'}
+                            </span>
+                            {dev.last_sync_time && (
+                                <span className="text-[10px] text-gray-400">
+                                    {new Date(dev.last_sync_time).toLocaleString()}
+                                </span>
+                            )}
+                        </div>
+                    </td>
+                );
+            case 'reachability':
+                return (
+                    <td key={column.key} className="p-4">
+                        <div className={`flex items-center text-xs font-medium ${
+                            dev.reachability === 'Unreachable' ? 'text-red-500' :
+                            dev.reachability === 'Reachable' ? 'text-green-600' : 'text-gray-400'
+                        }`}>
+                            {dev.reachability === 'Unreachable' ? (
+                                <><AlertCircle size={14} className="mr-1" /> Unreachable</>
+                            ) : dev.reachability === 'Reachable' ? (
+                                <><CheckCircle size={14} className="mr-1" /> Reachable</>
+                            ) : (
+                                <><AlertCircle size={14} className="mr-1" /> Unknown</>
+                            )}
+                        </div>
+                    </td>
+                );
+            case 'compliance':
+                return (
+                    <td key={column.key} className="p-4">
+                        {(() => {
+                            const golden = dev.golden_image?.version;
+                            const current = dev.version;
+                            if (!golden) {
+                                return <span className="text-xs font-bold px-2 py-1 rounded-full bg-gray-100 text-gray-500">No Standard</span>;
+                            }
+                            const compareVersions = (v1, v2) => {
+                                if (!v1 || !v2) return 0;
+                                const p1 = v1.toString().split(/[\.-]/);
+                                const p2 = v2.toString().split(/[\.-]/);
+                                for (let i = 0; i < Math.max(p1.length, p2.length); i++) {
+                                    const val1 = p1[i] || '';
+                                    const val2 = p2[i] || '';
+                                    const n1 = parseInt(val1);
+                                    const n2 = parseInt(val2);
+                                    if (!isNaN(n1) && !isNaN(n2)) {
+                                        if (n1 > n2) return 1;
+                                        if (n1 < n2) return -1;
+                                    } else {
+                                        if (val1 > val2) return 1;
+                                        if (val1 < val2) return -1;
+                                    }
+                                }
+                                return 0;
+                            };
+                            const comparison = compareVersions(current, golden);
+                            if (comparison < 0) {
+                                return <span className="text-xs font-bold px-2 py-1 rounded-full bg-orange-100 text-orange-700">Outdated</span>;
+                            } else if (comparison > 0) {
+                                return <span className="text-xs font-bold px-2 py-1 rounded-full bg-blue-100 text-blue-700">Ahead</span>;
+                            } else {
+                                return <span className="text-xs font-bold px-2 py-1 rounded-full bg-green-100 text-green-700">Up to Date</span>;
+                            }
+                        })()}
+                    </td>
+                );
+            case 'boot_method':
+                return <td key={column.key} className="p-4 text-gray-600 text-xs">{dev.boot_method || 'Unknown'}</td>;
+            case 'mac_address':
+                return <td key={column.key} className="p-4 text-gray-400 text-xs font-mono uppercase">{dev.mac_address || '-'}</td>;
+            default:
+                return <td key={column.key} className="p-4 text-gray-600">-</td>;
+        }
+    };
+
     // Better approach: Import useNavigate at top and use it
 
     // ... (This replace block is tricky without imports. Let's fix imports first in another block or do it carefully)
@@ -218,6 +401,13 @@ const Devices = () => {
                     </Link>
                     <button onClick={handleSync} className="text-gray-600 text-sm font-semibold hover:underline flex items-center bg-white border border-gray-200 px-3 py-2 rounded hover:bg-gray-50">
                         <RefreshCw size={16} className="mr-1" /> Sync Inventory
+                    </button>
+                    <button
+                        onClick={() => setShowConfigModal(true)}
+                        className="text-gray-600 text-sm font-semibold hover:underline flex items-center bg-white border border-gray-200 px-3 py-2 rounded hover:bg-gray-50"
+                        title="Configure Table Columns"
+                    >
+                        <Settings size={16} className="mr-1" /> Configure Table
                     </button>
                     <ImportManager onImportSuccess={fetchDevices} />
                     <button
@@ -247,9 +437,9 @@ const Devices = () => {
                             {/* Focus Menu */}
                             {showFocusMenu && (
                                 <div className="absolute top-full left-0 mt-2 w-48 bg-white border border-gray-200 shadow-lg rounded-md z-50 py-1">
-                                    <button onClick={() => { setFocusMode('Default'); setShowFocusMenu(false); }} className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-600">Default</button>
-                                    <button onClick={() => { setFocusMode('Software Images'); setShowFocusMenu(false); }} className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-600">Software Images</button>
-                                    <button onClick={() => { setFocusMode('Provision'); setShowFocusMenu(false); }} className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-600">Provision</button>
+                                    <button onClick={() => applyFocusPreset('Default')} className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-600">Default</button>
+                                    <button onClick={() => applyFocusPreset('Software Images')} className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-600">Software Images</button>
+                                    <button onClick={() => applyFocusPreset('Provision')} className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-600">Provision</button>
                                 </div>
                             )}
                         </div>
@@ -335,21 +525,15 @@ const Devices = () => {
                                         onChange={toggleSelectAll}
                                     />
                                 </th>
-                                <SortableHeader label="Device Name" sortKey="hostname" currentSort={sortConfig} onSort={requestSort} />
-                                <SortableHeader label="IP Address" sortKey="ip_address" currentSort={sortConfig} onSort={requestSort} />
-                                <SortableHeader label="Site" sortKey="site" currentSort={sortConfig} onSort={requestSort} />
-                                <SortableHeader label="Model" sortKey="model" currentSort={sortConfig} onSort={requestSort} />
-                                <SortableHeader label="Device Family" sortKey="family" currentSort={sortConfig} onSort={requestSort} />
-                                <SortableHeader label="Last Sync" sortKey="last_sync_time" currentSort={sortConfig} onSort={requestSort} />
-                                <SortableHeader label="Reachability" sortKey="reachability" currentSort={sortConfig} onSort={requestSort} />
-                                <SortableHeader label="Compliance" sortKey="compliance_status" currentSort={sortConfig} onSort={requestSort} />
-                                {focusMode === 'Software Images' && (
-                                    <>
-                                        <SortableHeader label="Boot Method" sortKey="boot_method" currentSort={sortConfig} onSort={requestSort} />
-                                        <SortableHeader label="Image Version" sortKey="version" currentSort={sortConfig} onSort={requestSort} />
-                                    </>
-                                )}
-                                <SortableHeader label="MAC Address" sortKey="id" currentSort={sortConfig} onSort={requestSort} />
+                                {selectedColumns.map(col => (
+                                    <SortableHeader 
+                                        key={col.key}
+                                        label={col.label} 
+                                        sortKey={col.sortKey} 
+                                        currentSort={sortConfig} 
+                                        onSort={requestSort} 
+                                    />
+                                ))}
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
@@ -364,146 +548,12 @@ const Devices = () => {
                                                 onChange={() => toggleSelectDevice(dev.id)}
                                             />
                                         </td>
-                                        <td className="p-4 font-semibold text-blue-600 group-hover:underline cursor-pointer flex items-center">
-                                            <Server size={16} className="mr-2 text-gray-400 group-hover:text-blue-500" />
-                                            <Link to={`/devices/${dev.id}`} className="hover:underline">
-                                                {dev.hostname}
-                                            </Link>
-                                        </td>
-                                        <td className="p-4 text-gray-600 font-mono text-xs">{dev.ip_address}</td>
-                                        <td className="p-4 text-gray-600">
-                                            <Link
-                                                to={`/sites/${dev.site || 'Global'}`}
-                                                className="hover:text-blue-600 hover:underline text-left block"
-                                                title="View Site Details"
-                                            >
-                                                {dev.site || 'Global'}
-                                            </Link>
-                                        </td>
-                                        <td className="p-4 text-gray-600 font-medium">
-                                            {dev.model ? (
-                                                <Link
-                                                    to={`/models/${dev.model}`}
-                                                    className="hover:text-blue-600 hover:underline text-left block"
-                                                    title="View Model Details"
-                                                >
-                                                    {dev.model}
-                                                </Link>
-                                            ) : (
-                                                <span>-</span>
-                                            )}
-                                        </td>
-                                        <td className="p-4 text-gray-600">{dev.family || 'Switch'}</td>
-                                        <td className="p-4">
-                                            <div className="flex flex-col">
-                                                <span className={`text-xs font-bold ${dev.last_sync_status === 'Completed' ? 'text-green-600' :
-                                                    dev.last_sync_status === 'Failed' ? 'text-red-500' :
-                                                        dev.last_sync_status === 'In Progress' ? 'text-blue-500' : 'text-gray-400'
-                                                    }`}>
-                                                    {dev.last_sync_status || 'Pending'}
-                                                </span>
-                                                {dev.last_sync_time && (
-                                                    <span className="text-[10px] text-gray-400">
-                                                        {new Date(dev.last_sync_time).toLocaleString()}
-                                                    </span>
-                                                )}
-                                            </div>
-                                        </td>
-                                        <td className="p-4">
-                                            <div className={`flex items-center text-xs font-medium ${dev.reachability === 'Unreachable' ? 'text-red-500' :
-                                                dev.reachability === 'Reachable' ? 'text-green-600' : 'text-gray-400'
-                                                }`}>
-                                                {dev.reachability === 'Unreachable' ? (
-                                                    <><AlertCircle size={14} className="mr-1" /> Unreachable</>
-                                                ) : dev.reachability === 'Reachable' ? (
-                                                    <><CheckCircle size={14} className="mr-1" /> Reachable</>
-                                                ) : (
-                                                    <><AlertCircle size={14} className="mr-1" /> Unknown</>
-                                                )}
-                                            </div>
-                                        </td>
-                                        <td className="p-4">
-                                            {(() => {
-                                                const golden = dev.golden_image ? dev.golden_image.version : null;
-                                                const current = dev.version;
-
-                                                // Default/Fallback from backend if needed, or calculate here
-                                                const status = dev.compliance_status;
-
-                                                // If we have explicit golden image data, we calculate detailed status
-                                                if (!golden) {
-                                                    return (
-                                                        <span className="text-xs font-bold px-2 py-1 rounded-full bg-gray-100 text-gray-500">
-                                                            No Standard
-                                                        </span>
-                                                    );
-                                                }
-
-                                                // Simple version comparison helper
-                                                const compareVersions = (v1, v2) => {
-                                                    if (!v1 || !v2) return 0;
-                                                    const p1 = v1.toString().split(/[\.-]/); // Split by dot or dash
-                                                    const p2 = v2.toString().split(/[\.-]/);
-
-                                                    for (let i = 0; i < Math.max(p1.length, p2.length); i++) {
-                                                        const val1 = p1[i] || '';
-                                                        const val2 = p2[i] || '';
-
-                                                        // Try numeric comparison first
-                                                        const n1 = parseInt(val1);
-                                                        const n2 = parseInt(val2);
-
-                                                        if (!isNaN(n1) && !isNaN(n2)) {
-                                                            if (n1 > n2) return 1;
-                                                            if (n1 < n2) return -1;
-                                                        } else {
-                                                            // Lexicographical comparison for non-numeric parts (e.g. '4a' vs '4')
-                                                            if (val1 > val2) return 1;
-                                                            if (val1 < val2) return -1;
-                                                        }
-                                                    }
-                                                    return 0;
-                                                };
-
-                                                const comparison = compareVersions(current, golden);
-
-                                                if (comparison < 0) {
-                                                    return (
-                                                        <span className="text-xs font-bold px-2 py-1 rounded-full bg-orange-100 text-orange-700" title={`Target: ${golden}`}>
-                                                            Outdated
-                                                        </span>
-                                                    );
-                                                } else if (comparison > 0) {
-                                                    return (
-                                                        <span className="text-xs font-bold px-2 py-1 rounded-full bg-blue-100 text-blue-700" title={`Target: ${golden}`}>
-                                                            Ahead of Standard
-                                                        </span>
-                                                    );
-                                                } else {
-                                                    return (
-                                                        <span className="text-xs font-bold px-2 py-1 rounded-full bg-green-100 text-green-700">
-                                                            Up to Date
-                                                        </span>
-                                                    );
-                                                }
-                                            })()}
-                                        </td>
-                                        {focusMode === 'Software Images' && (
-                                            <>
-                                                <td className="p-4 text-gray-600 text-xs">
-                                                    <span title={dev.boot_method}>{dev.boot_method || 'Unknown'}</span>
-                                                </td>
-                                                <td className="p-4 text-gray-600">
-                                                    {dev.version || '16.9.1'}
-                                                </td>
-                                            </>
-                                        )}
-                                        <td className="p-4 text-gray-400 text-xs font-mono uppercase">{dev.mac_address || '-'}</td>
+                                        {selectedColumns.map(col => renderCell(dev, col))}
                                     </tr>
                                 ))
                             ) : (
                                 <tr>
-                                    <td colSpan="100%" className="p-8 text-center text-gray-500">
+                                    <td colSpan={selectedColumns.length + 1} className="p-8 text-center text-gray-500">
                                         No devices found matching your search.
                                     </td>
                                 </tr>
@@ -574,6 +624,17 @@ const Devices = () => {
                     />
                 )
             }
+
+            {/* Table Configuration Modal */}
+            {showConfigModal && (
+                <TableConfigModal
+                    isOpen={showConfigModal}
+                    onClose={() => setShowConfigModal(false)}
+                    availableColumns={allColumns}
+                    selectedColumns={selectedColumns}
+                    onSave={saveColumnConfig}
+                />
+            )}
         </div >
     );
 };

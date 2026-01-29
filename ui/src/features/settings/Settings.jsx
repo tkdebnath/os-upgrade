@@ -3,13 +3,11 @@ import axios from 'axios';
 import { Key, Shield, Eye, Trash2, Server, Plus, Edit2, X, Save } from 'lucide-react';
 import ConfirmModal from '../inventory/ConfirmModal';
 import GlobalCredentials from './GlobalCredentials';
+import { useAuth } from '../../context/AuthContext';
 
 const Settings = () => {
-    // --- API Keys State ---
-    const [apiKeys, setApiKeys] = useState([
-        { id: 1, prefix: '9A7ds...', created: '2025-10-24 10:00:00', name: 'CI/CD Pipeline' },
-    ]);
-
+    const { user } = useAuth();
+    
     // --- File Server State ---
     const [fileServers, setFileServers] = useState([]);
     const [serverLoading, setServerLoading] = useState(false);
@@ -42,13 +40,6 @@ const Settings = () => {
         } finally {
             setServerLoading(false);
         }
-    };
-
-    // --- API Key Handlers ---
-    const generateKey = () => {
-        // Mock
-        const newKey = { id: Date.now(), prefix: 'NewK...', created: new Date().toISOString(), name: 'New Key' };
-        setApiKeys([...apiKeys, newKey]);
     };
 
     // --- File Server Handlers ---
@@ -178,39 +169,20 @@ const Settings = () => {
                         <div className="space-y-3">
                             <div className="flex justify-between border-b pb-2">
                                 <span className="text-gray-500">Username</span>
-                                <span className="font-medium">john_doe</span>
+                                <span className="font-medium">{user?.username || 'Unknown'}</span>
+                            </div>
+                            <div className="flex justify-between border-b pb-2">
+                                <span className="text-gray-500">Email</span>
+                                <span className="font-medium">{user?.email || 'Not set'}</span>
                             </div>
                             <div className="flex justify-between border-b pb-2">
                                 <span className="text-gray-500">Role</span>
-                                <span className="font-medium">Super Admin</span>
+                                <span className="font-medium">{user?.is_superuser ? 'Super Admin' : user?.is_staff ? 'Staff' : 'User'}</span>
                             </div>
                             <div className="flex justify-between border-b pb-2">
-                                <span className="text-gray-500">Last Login</span>
-                                <span className="font-medium">Just now</span>
+                                <span className="text-gray-500">Groups</span>
+                                <span className="font-medium">{user?.groups?.length > 0 ? user.groups.join(', ') : 'None'}</span>
                             </div>
-                        </div>
-                    </div>
-
-                    {/* API Keys */}
-                    <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-                        <div className="flex justify-between items-center mb-4">
-                            <h2 className="text-lg font-semibold flex items-center"><Key className="mr-2 h-5 w-5 text-purple-500" /> API Keys</h2>
-                            <button onClick={generateKey} className="text-sm bg-purple-600 text-white px-3 py-1 rounded hover:bg-purple-700 transition">
-                                Generate
-                            </button>
-                        </div>
-                        <div className="space-y-3">
-                            {apiKeys.map(key => (
-                                <div key={key.id} className="flex justify-between items-center bg-gray-50 p-3 rounded border border-gray-200">
-                                    <div>
-                                        <p className="font-medium text-sm">{key.name}</p>
-                                        <p className="text-xs font-mono text-gray-500">{key.prefix} • {new Date(key.created).toLocaleDateString()}</p>
-                                    </div>
-                                    <div className="flex space-x-2">
-                                        <button className="p-1 text-gray-500 hover:text-red-600"><Trash2 size={16} /></button>
-                                    </div>
-                                </div>
-                            ))}
                         </div>
                     </div>
 

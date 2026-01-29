@@ -7,12 +7,13 @@ import io
 from .plugins.registry import PluginRegistry
 from swim_backend.core.services.sync_service import run_sync_task
 
-# Import ImageSerializer
-from swim_backend.images.models import ImageSerializer
+# Import ImageSerializer from views, not models
+from swim_backend.images.views import ImageSerializer
 
 class DeviceModelSerializer(serializers.ModelSerializer):
     supported_images_details = ImageSerializer(source='supported_images', many=True, read_only=True)
     default_image_details = ImageSerializer(source='default_image', read_only=True)
+    device_count = serializers.IntegerField(read_only=True)
     
     class Meta:
         model = DeviceModel
@@ -146,10 +147,42 @@ class DeviceSerializer(serializers.ModelSerializer):
         }
 
 class DeviceModelViewSet(viewsets.ModelViewSet):
-    queryset = DeviceModel.objects.all().order_by('name')
     serializer_class = DeviceModelSerializer
     lookup_field = 'name'
     lookup_value_regex = '[^/]+'
+    permission_classes = []  # Allow all authenticated users (covered by global setting)
+
+    def get_queryset(self):
+        from django.db.models import Count
+        return DeviceModel.objects.annotate(device_count=Count('devices')).order_by('name')
+    
+    def update(self, request, *args, **kwargs):
+        """Override update to provide better error messages"""
+        try:
+            return super().update(request, *args, **kwargs)
+        except Exception as e:
+            from rest_framework.response import Response
+            import traceback
+            print(f"Error updating DeviceModel: {str(e)}")
+            print(traceback.format_exc())
+            return Response(
+                {"error": str(e), "detail": "Failed to update device model"}, 
+                status=400
+            )
+    
+    def partial_update(self, request, *args, **kwargs):
+        """Override partial_update to provide better error messages"""
+        try:
+            return super().partial_update(request, *args, **kwargs)
+        except Exception as e:
+            from rest_framework.response import Response
+            import traceback
+            print(f"Error in partial update of DeviceModel: {str(e)}")
+            print(traceback.format_exc())
+            return Response(
+                {"error": str(e), "detail": "Failed to update device model"}, 
+                status=400
+            )
 
     @action(detail=True, methods=['get'])
     def scan_images(self, request, *args, **kwargs):
@@ -229,6 +262,7 @@ class DeviceViewSet(viewsets.ModelViewSet):
         from swim_backend.images.models import Image
         
         device_ids = request.data.get('ids', [])
+        image_map = request.data.get('image_map', {})  # { deviceId: imageId }
         devices = Device.objects.filter(id__in=device_ids)
         results = []
         
@@ -244,12 +278,27 @@ class DeviceViewSet(viewsets.ModelViewSet):
                 self.selected_checks = Device.objects.none() # Empty QuerySet-like
 
         for dev in devices:
-            # 1. Determine Target Image Size
+            # 1. Determine Target Image Size and Info
             target_size = 0
             golden_version = None
+            target_image_file = None
             
-            if dev.model and dev.model.golden_image_version:
+            # Check if a specific image was selected in step 3
+            selected_image_id = image_map.get(str(dev.id))
+            if selected_image_id:
+                # Use the selected image from step 3
+                try:
+                    selected_img = Image.objects.get(id=int(selected_image_id))
+                    target_size = selected_img.size_bytes
+                    golden_version = selected_img.version
+                    target_image_file = selected_img.filename
+                except (Image.DoesNotExist, ValueError):
+                    pass  # Fall through to golden image
+            
+            # Fall back to golden image if no selection or selected image not found
+            if not target_size and dev.model and dev.model.golden_image_version:
                 golden_version = dev.model.golden_image_version
+                target_image_file = dev.model.golden_image_file
                 if dev.model:
                      # 1. Prefer Explicit Size from Standard
                      if dev.model.golden_image_size:
@@ -323,6 +372,8 @@ class DeviceViewSet(viewsets.ModelViewSet):
                 'hostname': dev.hostname,
                 'current_version': dev.version,
                 'target_version': golden_version,
+                'target_image_file': target_image_file,
+                'target_image_size': target_size,
                 'status': status_str,
                 'checks': ui_checks
             })
