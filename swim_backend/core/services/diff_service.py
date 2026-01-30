@@ -42,9 +42,7 @@ def generate_diffs(job, checks, log_dir):
         try:
             os.makedirs(diff_dir, exist_ok=True)
             # Use Python module invocation for genie diff
-            import sys
-            python_exec = sys.executable
-            cmd = [python_exec, "-m", "genie.cli", "diff", pre_dir, post_dir, "--output", diff_dir]
+            cmd = ["genie", "diff", pre_dir, post_dir, "--output", diff_dir]
             logger.info(f"Running Genie Diff CLI: {' '.join(cmd)}")
             
             # Run command

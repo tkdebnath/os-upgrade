@@ -222,7 +222,7 @@ class JobViewSet(viewsets.ModelViewSet):
             # Mock Diff content if file not found
             content = "Diff content unavailable or not generated."
             # Ideally we check /logs/.../diff_summary.txt
-            log_dir = f"logs/{job.device.hostname}/{job.id}/"
+            log_dir = f"logs/{job.device.id}/{job.id}/"
             if os.path.exists(os.path.join(log_dir, 'diff_summary.txt')):
                  with open(os.path.join(log_dir, 'diff_summary.txt'), 'r') as f:
                      content = f.read()
@@ -235,7 +235,7 @@ class JobViewSet(viewsets.ModelViewSet):
         buffer = io.BytesIO()
         with zipfile.ZipFile(buffer, 'w') as zip_file:
             
-            log_dir = f"logs/{job.device.hostname}/{job.id}/"
+            log_dir = f"logs/{job.device.id}/{job.id}/"
             
             # Add entire directories to preserve folder structure
             if type == 'pre':
@@ -399,7 +399,7 @@ class JobViewSet(viewsets.ModelViewSet):
         from io import BytesIO
         
         job = self.get_object()
-        log_dir = f"logs/{job.device.hostname}/{job.id}/"
+        log_dir = f"logs/{job.device.id}/{job.id}/"
         
         if not os.path.exists(log_dir):
             return Response({"error": "No logs found for this job"}, status=404)

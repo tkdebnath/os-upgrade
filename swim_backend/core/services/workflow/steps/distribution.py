@@ -88,7 +88,7 @@ class DeviceFileDownloader:
         if self.device:
             try:
                 self.device.disconnect()
-                self.log(f"[{self._timestamp()}] Disconnected from device")
+                self.log("Disconnected from device")
             except:
                 pass
     
@@ -334,7 +334,7 @@ class DeviceFileDownloader:
             output = self.device.execute(cmd)
             
             # Regex to match size in dir output
-            # Example: "  267  -rw-   107412732  Jul 28 2015 12:00:00 +00:00  filename"
+            # Example: "  267  -rw-   107412732  Jan 28 2026 12:00:00 +00:00  filename"
             match = re.search(r'\s+(\d+)\s+\w{3}\s+\d+', output)
             if match:
                 return int(match.group(1))
@@ -499,6 +499,21 @@ class DistributeStep(BaseStep):
     def execute(self):
         job = self.get_job()
         device = job.device
+        
+        # Prerequisite validation: Readiness
+        steps_log = job.steps or []
+        required_steps = ['readiness']
+        missing_reqs = []
+
+        #disable readiness check for now
+        # for req in required_steps:
+        #     found = next((s for s in steps_log if s.get('step_type') == req), None)
+        #     if not found or found['status'] != 'success':
+        #          missing_reqs.append(req)
+        
+        if missing_reqs:
+             self.log(f"CRITICAL: Prerequisites not met: {', '.join(missing_reqs)}. Distribution aborted.")
+             return 'failed', f"Missing {', '.join(missing_reqs)}"
         
         if not job.image:
              self.log("No image assigned to job. Skipping Distribution.")

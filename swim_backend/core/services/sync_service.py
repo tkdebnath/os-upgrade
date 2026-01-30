@@ -59,7 +59,6 @@ def sync_device_details(device_id):
                # Platform usually holds the chassis info in Genie
                hardware_model = output.get('pid', 'unknown')
            
-           print(output)
 
            # Update hostname
            if dev.learned_hostname and dev.learned_hostname != device.hostname:

@@ -12,6 +12,7 @@ const STEP_TYPES = [
     { type: 'postcheck', label: 'Post-Checks', icon: FileText, color: 'text-teal-600' },
     { type: 'wait', label: 'Wait', icon: Clock, color: 'text-orange-600' },
     { type: 'ping', label: 'Reachability Check', icon: Server, color: 'text-pink-600' },
+    { type: 'verification', label: 'Version Check', icon: CheckCircle, color: 'text-emerald-600' },
 ];
 
 const WorkflowEditor = () => {

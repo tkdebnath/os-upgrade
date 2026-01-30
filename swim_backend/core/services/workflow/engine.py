@@ -19,6 +19,7 @@ class WorkflowEngine:
         from .steps.postchecks import PostCheckStep
         from .steps.ping import PingStep
         from .steps.wait import WaitStep
+        from .steps.verification import VerificationStep
         
         MAPPING = {
             'readiness': ReadinessStep,
@@ -28,6 +29,7 @@ class WorkflowEngine:
             'postcheck': PostCheckStep,
             'ping': PingStep,
             'wait': WaitStep,
+            'verification': VerificationStep,
             # 'custom': CustomStep
         }
         return MAPPING.get(step_type)
