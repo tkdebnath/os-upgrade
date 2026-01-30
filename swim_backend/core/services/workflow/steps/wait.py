@@ -13,7 +13,7 @@ class WaitStep(BaseStep):
         self.log(f"Waiting for {duration} seconds...")
         
         # In a real async engine (Celery), this should be a retry/countdown.
-        # For this thread-based prototype, we sleep.
+        # Thread-based implementation uses sleep.
         time.sleep(duration)
         
         self.log("Wait complete.")

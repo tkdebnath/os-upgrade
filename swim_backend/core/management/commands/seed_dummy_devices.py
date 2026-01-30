@@ -3,7 +3,7 @@ from swim_backend.devices.models import Device, DeviceModel, Site
 import random
 
 class Command(BaseCommand):
-    help = 'Seeds dummy C9300-48UXM-A devices'
+    help = 'Seeds C9300-48UXM-A devices for testing'
 
     def handle(self, *args, **options):
         # Create Model

@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 def sync_device_details(device_id):
     """
-    Connects to device, fetches version/platform, and updates DB.
+    SSH to device, run show version, pull hardware/software info.
     """
     try:
         device = Device.objects.get(id=device_id)
@@ -18,23 +18,18 @@ def sync_device_details(device_id):
         device.last_sync_status = 'In Progress'
         device.save()
 
-        # We need a temporary job ID for logs
+        # Temporary job ID for logs
         temp_id = f"sync_{device.id}"
         dev, log_dir = create_genie_device(device, temp_id)
         
-        # In a real scenario, use Genie or Netmiko to fetch 'show version'
-        # Here we mock or use Genie basic learn if available
-        
+        # SSH to device and run show version
         try:
-           # dev is now the Device object directly
-           # tb.devices lookup is removed
            dev.connect(log_stdout=True, learn_hostname=True)
            
-           # For IOSXE
-           # suppress
+           # Parse show version output with Genie
            output = dev.parse("show version")
 
-           # initalise variables
+           # Pull version and hardware details
            version = None
            hardware_model = None
            boot_method = None

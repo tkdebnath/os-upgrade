@@ -21,7 +21,7 @@ class BaseStep(ABC):
         from swim_backend.core.models import Job
         # We fetch fresh to avoid overwriting concurrent updates
         # Ideally we use an atomic update or a separate Log model
-        # For now, append to the big text field
+        # Append to the big text field
         try:
              job = Job.objects.get(id=self.job_id)
              timestamp = datetime.datetime.now().strftime("[%Y-%m-%d %H:%M:%S]")

@@ -3,7 +3,7 @@ from django.utils.html import format_html
 from django.urls import reverse
 from django.utils.safestring import mark_safe
 import json
-from .models import Job, ActivityLog, Workflow, WorkflowStep, ValidationCheck, CheckRun, APIToken
+from .models import Job, ActivityLog, Workflow, WorkflowStep, ValidationCheck, CheckRun, APIToken, ZTPWorkflow
 
 @admin.register(Job)
 class JobAdmin(admin.ModelAdmin):
@@ -161,3 +161,64 @@ class ActivityLogAdmin(admin.ModelAdmin):
     
     def has_delete_permission(self, request, obj=None):
         return request.user.is_superuser
+
+
+@admin.register(ZTPWorkflow)
+class ZTPWorkflowAdmin(admin.ModelAdmin):
+    list_display = ('name', 'workflow', 'target_site', 'status', 'success_rate_display', 'total_devices', 'created_at')
+    list_filter = ('status', 'target_site', 'device_family_filter', 'created_at')
+    readonly_fields = ('created_by', 'created_at', 'updated_at', 'webhook_token', 'success_rate_display')
+    search_fields = ('name', 'description')
+    filter_horizontal = ('devices_provisioned', 'precheck_validations', 'postcheck_validations')
+    
+    fieldsets = (
+        ('Basic Information', {
+            'fields': ('name', 'description', 'status')
+        }),
+        ('Workflow Configuration', {
+            'fields': ('workflow', 'target_site')
+        }),
+        ('Device Filters (Optional)', {
+            'fields': ('device_family_filter', 'platform_filter', 'model_filter'),
+            'classes': ('collapse',)
+        }),
+        ('Validation Checks', {
+            'fields': ('precheck_validations', 'postcheck_validations'),
+            'classes': ('collapse',)
+        }),
+        ('Progress Tracking', {
+            'fields': ('devices_provisioned', 'total_devices', 'completed_devices', 'failed_devices', 'skipped_devices', 'success_rate_display')
+        }),
+        ('Webhook Configuration', {
+            'fields': ('webhook_token',),
+            'classes': ('collapse',)
+        }),
+        ('Metadata', {
+            'fields': ('created_by', 'created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    def success_rate_display(self, obj):
+        if obj.total_devices == 0:
+            return "No devices"
+        percentage = int((obj.completed_devices / obj.total_devices) * 100) if obj.total_devices > 0 else 0
+        color = '#10B981' if percentage == 100 else '#3B82F6' if percentage > 50 else '#EF4444'
+        return format_html(
+            '<div style="width:100px; background:#e5e7eb; border-radius:4px; height:20px; position:relative;">'
+            '<div style="width:{}%; background:{}; height:100%; border-radius:4px;"></div>'
+            '<span style="position:absolute; top:2px; left:50%; transform:translateX(-50%); font-size:11px; font-weight:bold;">{}%</span>'
+            '</div>',
+            percentage, color, percentage
+        )
+    success_rate_display.short_description = 'Success Rate'
+    
+    def save_model(self, request, obj, form, change):
+        if not change:
+            obj.created_by = request.user
+            # Generate webhook token if not set
+            if not obj.webhook_token:
+                import secrets
+                obj.webhook_token = secrets.token_urlsafe(32)
+        super().save_model(request, obj, form, change)
+

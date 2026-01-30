@@ -6,20 +6,20 @@ from genie.conf.base.device import Device as GenieDevice
 from swim_backend.core.services.workflow.base import BaseStep
 from swim_backend.core.services.diff_service import log_update
 
-# Local Semaphore if we want to isolate, or import global
+# Local Semaphore for isolation
 DISTRIBUTION_SEMAPHORE = threading.Semaphore(40)
 
 
 class DeviceFileDownloader:
-    """Download files to Cisco device with progress monitoring and connection resilience."""
+    """Handle IOS file copies to Cisco devices with progress tracking and reconnects."""
     
     def __init__(self, device_config, logger_callback=None):
         """
-        Initialize the downloader.
+        Set up the file transfer handler.
         
         Args:
-            device_config: Dict with device connection parameters
-            logger_callback: Function to call for logging (e.g. self.log)
+            device_config: Connection info (IP, creds, etc.)
+            logger_callback: Function to log progress updates
         """
         self.device_config = device_config
         self.device = None
@@ -35,7 +35,7 @@ class DeviceFileDownloader:
             print(message)
         
     def connect(self):
-        """Connect to the device with reconnect capability."""
+        """SSH to device with auto-retry if connection drops."""
         max_retries = 3
         retry_count = 0
         
@@ -117,7 +117,7 @@ class DeviceFileDownloader:
             # Example line: "  123456  -rw-   ..." or "  123456  Jul 1 2024 ..."
             # Basic fallback: look for the number before the filename?
             # Or use 'dir' summary?
-            # Let's try matching a large number before permission flags or date
+            # Try matching a large number before permission flags or date
             
             # Simple approach: Check if "No such file" or similar
             if "No such file" in output or "Error opening" in output:
@@ -517,9 +517,6 @@ class DistributeStep(BaseStep):
         
         if not job.image:
              self.log("No image assigned to job. Skipping Distribution.")
-             # If distribution is mandatory, this should fail. 
-             # Or if smart enough, skip.
-             # Assuming fail is safer if step exists.
              return 'failed', "No image assigned to job"
 
         self.log("Waiting for distribution slot (Max 40 concurrent)...")
@@ -532,9 +529,6 @@ class DistributeStep(BaseStep):
                 
             self.log("Acquired slot. Starting Distribution Phase...")
             
-            # Resolve File Server
-            # Note: Job might have a specific file_server assigned if user manually picked one. 
-            # If not (null), we use the logic.
             target_fs = job.file_server
             fs_source = "Manual Assignment"
             
@@ -565,7 +559,7 @@ class DistributeStep(BaseStep):
                     return 'failed', f"Transfer failed: {e}"
             
             # Final MD5 Verification (redundant if perform_transfer does it, but keeping as safety or remove?)
-            # perform_transfer does post-check. so we can just return success here.
+            # perform_transfer handles post-check verification.
             
             return 'success', "Distribution Complete"
 
@@ -577,11 +571,9 @@ class DistributeStep(BaseStep):
             self.log("Error: No File Server available to download from.")
             raise Exception("No File Server resolved")
 
-        # 1. Construct URL
+        # Construct URL
         # Format: protocol://username:password@ip:port/base_path/filename
-        # But for 'copy http://...' we usually leave auth in URL or prompt.
-        # This implementation assumes basic auth in URL or no auth for simplicity dependent on user environment,
-        # but let's stick to standard URL construction.
+        # Basic auth in URL or no auth depending on environment.
         
         # Removing leading/trailing slashes for clean join
         base_path = file_server.base_path.strip('/') if file_server.base_path else ''
@@ -600,7 +592,7 @@ class DistributeStep(BaseStep):
         # 2. Prepare Device Config for Genie
         device = job.device
         
-        # Resolving credentials (similar to genie_service but we need dict)
+        # Resolving credentials (similar to genie_service)
         from swim_backend.devices.models import GlobalCredential
         username = device.username
         password = device.password

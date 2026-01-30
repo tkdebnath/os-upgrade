@@ -49,10 +49,6 @@ class VerificationStep(BaseStep):
         )
         
         try:
-            # Wait loop for device to come back online?
-            # Usually 'Activate' step handles the wait or we have a separate 'Wait' step.
-            # Assuming device is reachable here.
-            
             self.log(f"Connecting to {device.hostname} to check version...")
             genie_device.connect(
                 via='default',
@@ -65,10 +61,6 @@ class VerificationStep(BaseStep):
             self.log("Retrieving current version info...")
             output = genie_device.parse('show version')
             
-            # Extract version
-            # Structure depends on OS, assuming IOS-XE common structure
-            # usually in output['version']['version'] or similar
-
             current_version = None
 
             if isinstance(output, dict) and isinstance(output.get('version', {}), dict):

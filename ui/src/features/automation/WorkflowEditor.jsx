@@ -6,7 +6,7 @@ import ConfirmModal from '../inventory/ConfirmModal';
 
 const STEP_TYPES = [
     { type: 'readiness', label: 'Readiness Check', icon: CheckCircle, color: 'text-indigo-600' },
-    { type: 'distribution', label: 'Software Distribution', icon: Server, color: 'text-blue-600' },
+    { type: 'distribution', label: 'IOS File Copy', icon: Server, color: 'text-blue-600' },
     { type: 'precheck', label: 'Pre-Checks', icon: FileText, color: 'text-purple-600' },
     { type: 'activation', label: 'Activation', icon: Play, color: 'text-green-600' },
     { type: 'postcheck', label: 'Post-Checks', icon: FileText, color: 'text-teal-600' },

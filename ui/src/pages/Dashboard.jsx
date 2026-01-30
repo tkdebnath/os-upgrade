@@ -152,12 +152,12 @@ const Dashboard = () => {
                         <p className="text-xs text-gray-400 mt-4 text-center">Last 24 Hours</p>
                     </Card>
 
-                    {/* Trends and Insights */}
-                    <Card title="Trends and Insights">
+                    {/* Network Insights */}
+                    <Card title="Network Insights">
                         <div className="flex flex-col items-center justify-center h-full text-center p-4">
                             <Box className="text-blue-200 mb-3" size={48} />
-                            <p className="text-sm text-gray-600">AI Network Analytics is enabled.</p>
-                            <a href="#" className="text-blue-600 text-xs font-semibold mt-2 hover:underline">View Settings</a>
+                            <p className="text-sm text-gray-600">Device compliance tracking and upgrade history.</p>
+                            <a href="#" className="text-blue-600 text-xs font-semibold mt-2 hover:underline">View Reports</a>
                         </div>
                     </Card>
                 </div>

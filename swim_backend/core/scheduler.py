@@ -18,7 +18,7 @@ def scheduler_tick():
                 # Double check to avoid race conditions if multiple workers (not an issue in dev server usually)
                 # Ensure we only pick up jobs that are still scheduled
                 # We update status immediately to avoid re-picking
-                # run_swim_job handles status updates, but let's be safe
+                # run_swim_job handles status updates
                 print(f"[Scheduler] Triggering scheduled job {job.id} for device {job.device}")
                 t = threading.Thread(target=run_swim_job, args=(job.id,))
                 t.daemon = True

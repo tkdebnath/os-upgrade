@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
-import { Network, Activity, Clock, PieChart as PieIcon, BarChart as BarIcon, CheckCircle } from 'lucide-react';
+import { Network, Activity, Clock, PieChart as PieIcon, BarChart as BarIcon, CheckCircle, Zap, Play, Pause } from 'lucide-react';
 import { useAuth } from './context/AuthContext';
 
 const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6'];
@@ -12,8 +12,9 @@ const Dashboard = () => {
     const { user } = useAuth();
     const [devices, setDevices] = useState([]);
     const [jobs, setJobs] = useState([]);
-    const [stats, setStats] = useState({ analytics: null });
+    const [stats, setStats] = useState({ analytics: null, ztp: null });
     const [loading, setLoading] = useState(true);
+    const [ztpWorkflows, setZtpWorkflows] = useState([]);
 
     const initialJobStats = [
         { name: 'Success', value: 0, fill: '#10B981' },
@@ -36,17 +37,20 @@ const Dashboard = () => {
 
     const fetchData = async () => {
         try {
-            const [devRes, jobRes, statsRes] = await Promise.all([
+            const [devRes, jobRes, statsRes, ztpRes] = await Promise.all([
                 axios.get('/api/dcim/devices/'),
                 axios.get('/api/core/jobs/'),
-                axios.get('/api/core/dashboard/stats/')
+                axios.get('/api/core/dashboard/stats/'),
+                axios.get('/api/core/ztp-workflows/')
             ]);
             const fetchedDevices = devRes.data.results || devRes.data;
             const fetchedJobs = jobRes.data.results || jobRes.data;
+            const fetchedZtp = ztpRes.data.results || ztpRes.data;
 
             setDevices(fetchedDevices);
             setJobs(fetchedJobs);
             setStats(statsRes.data);
+            setZtpWorkflows(fetchedZtp);
 
             setJobStats([
                 { name: 'Success', value: fetchedJobs.filter(j => j.status === 'success').length, fill: '#10B981' },
@@ -250,6 +254,133 @@ const Dashboard = () => {
                             </div>
                         ))}
                         {jobs.length === 0 && <p className="text-gray-400 col-span-3 text-center">No recent activity.</p>}
+                    </div>
+                </section>
+
+                {/* ZTP Section - Zero Touch Provisioning */}
+                <section className="col-span-3 bg-gradient-to-br from-blue-50 to-indigo-50 p-6 rounded-xl shadow-sm border border-blue-100 hover:shadow-md transition-shadow">
+                    <div className="flex justify-between items-center mb-6">
+                        <h2 className="text-lg font-semibold flex items-center text-gray-800">
+                            <Zap size={20} className="mr-2 text-blue-600" /> Zero Touch Provisioning (ZTP)
+                        </h2>
+                        <button
+                            onClick={() => navigate('/ztp')}
+                            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition text-sm font-semibold flex items-center gap-2"
+                        >
+                            <Play size={16} /> Create ZTP Workflow
+                        </button>
+                    </div>
+
+                    {/* ZTP Stats Cards */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                        <div className="bg-white p-4 rounded-lg border border-blue-100">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <p className="text-xs text-gray-500 uppercase font-semibold">Active Endpoints</p>
+                                    <p className="text-2xl font-bold text-blue-600">{stats.ztp?.active_workflows || 0}</p>
+                                </div>
+                                <Activity className="text-blue-400" size={32} />
+                            </div>
+                        </div>
+                        <div className="bg-white p-4 rounded-lg border border-amber-100">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <p className="text-xs text-gray-500 uppercase font-semibold">Paused</p>
+                                    <p className="text-2xl font-bold text-amber-600">{stats.ztp?.paused_workflows || 0}</p>
+                                </div>
+                                <Pause className="text-amber-400" size={32} />
+                            </div>
+                        </div>
+                        <div className="bg-white p-4 rounded-lg border border-green-100">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <p className="text-xs text-gray-500 uppercase font-semibold">Provisioned Today</p>
+                                    <p className="text-2xl font-bold text-green-600">{stats.ztp?.total_provisioned_today || 0}</p>
+                                </div>
+                                <CheckCircle className="text-green-400" size={32} />
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Recent ZTP Workflows */}
+                    <div className="bg-white rounded-lg border border-blue-100 overflow-hidden">
+                        <div className="px-4 py-3 bg-gray-50 border-b border-gray-100">
+                            <h3 className="text-sm font-semibold text-gray-700">Recent ZTP Endpoints</h3>
+                        </div>
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left text-sm">
+                                <thead className="bg-gray-50 text-gray-500 uppercase text-xs font-bold tracking-wider border-b border-gray-100">
+                                    <tr>
+                                        <th className="p-3">Endpoint Name</th>
+                                        <th className="p-3">Workflow</th>
+                                        <th className="p-3">Devices</th>
+                                        <th className="p-3">Success Rate</th>
+                                        <th className="p-3">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-50">
+                                    {ztpWorkflows.slice(0, 5).map(wf => {
+                                        const successRate = wf.total_devices > 0 ? Math.round((wf.completed_devices / wf.total_devices) * 100) : 0;
+                                        const getStatusColor = (status) => {
+                                            const colors = {
+                                                'active': 'bg-green-100 text-green-700 ring-green-200',
+                                                'paused': 'bg-amber-100 text-amber-700 ring-amber-200',
+                                                'completed': 'bg-blue-100 text-blue-700 ring-blue-200',
+                                                'archived': 'bg-gray-100 text-gray-500 ring-gray-200'
+                                            };
+                                            return colors[status] || 'bg-gray-100 text-gray-600 ring-gray-200';
+                                        };
+
+                                        return (
+                                            <tr key={wf.id} className="hover:bg-blue-50/30 cursor-pointer" onClick={() => navigate(`/ztp`)}>
+                                                <td className="p-3 font-medium text-gray-800">{wf.name}</td>
+                                                <td className="p-3 text-gray-600 text-xs">{wf.workflow_name || 'Not set'}</td>
+                                                <td className="p-3 text-gray-600">
+                                                    <span className="font-semibold">{wf.total_devices || 0}</span>
+                                                    {wf.total_devices > 0 && (
+                                                        <span className="text-xs text-gray-400 ml-1">
+                                                            (✓{wf.completed_devices} ✗{wf.failed_devices})
+                                                        </span>
+                                                    )}
+                                                </td>
+                                                <td className="p-3">
+                                                    <div className="flex items-center gap-2">
+                                                        <div className="flex-1 bg-gray-200 rounded-full h-2 overflow-hidden">
+                                                            <div 
+                                                                className="bg-blue-600 h-full transition-all duration-300"
+                                                                style={{ width: `${successRate}%` }}
+                                                            />
+                                                        </div>
+                                                        <span className="text-xs text-gray-600 font-medium w-10 text-right">{successRate}%</span>
+                                                    </div>
+                                                </td>
+                                                <td className="p-3">
+                                                    <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide ring-1 ${getStatusColor(wf.status)}`}>
+                                                        {wf.status}
+                                                    </span>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                    {ztpWorkflows.length === 0 && (
+                                        <tr>
+                                            <td colSpan="5" className="p-6 text-center text-gray-400">
+                                                <Zap className="mx-auto mb-2 text-gray-300" size={32} />
+                                                <p>No ZTP workflows configured. Set one up to auto-upgrade devices on first boot!</p>
+                                            </td>
+                                        </tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    {/* ZTP Info Card */}
+                    <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                        <p className="text-sm text-blue-900">
+                            <strong className="font-semibold">💡 True Zero Touch Provisioning!</strong> Device boots, hits webhook with creds, 
+                            SWIM discovers it, checks if running right IOS, auto-upgrades to golden image if needed.
+                        </p>
                     </div>
                 </section>
             </div>

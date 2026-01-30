@@ -11,7 +11,7 @@ class WorkflowEngine:
         self.job_id = job_id
         
     def get_step_class(self, step_type):
-        """Factory to get step implementation class"""
+        """Map step names to their handler classes"""
         from .steps.readiness import ReadinessStep
         from .steps.distribution import DistributeStep
         from .steps.prechecks import PreCheckStep
@@ -37,28 +37,16 @@ class WorkflowEngine:
     def run(self):
         job = Job.objects.get(id=self.job_id)
         
-        # 1. Determine Workflow
         workflow = job.workflow
         if not workflow:
-            # Fallback for legacy jobs or if no workflow selected
-            # For now, we can create a temporary in-memory sequence or fail
-            log_update(self.job_id, "No workflow assigned. Using Default Legacy Flow.")
-            # TODO: Assign default workflow if exists, else generic
-            # For now, let's assume a Default Workflow exists or we build one on the fly?
-            # Better strategy: creating a 'Default Upgrade' workflow in migration was cleaner, 
-            # but let's assume the user will pick one. If None, we abort or run legacy.
-            # Let's ABORT to force usage of new system, or migrate on the fly.
-            
-            # Or better: If no workflow, we just run the old function?
-            # The goal is to Refactor. So we need the engine to work.
-            # Let's create a default workflow if none exists.
+            log_update(self.job_id, "No workflow assigned. Looking for default...")
             
             default_wf = Workflow.objects.filter(is_default=True).first()
             if default_wf:
                 job.workflow = default_wf
                 job.save()
                 workflow = default_wf
-                log_update(self.job_id, f"Auto-assigned default workflow: {workflow.name}")
+                log_update(self.job_id, f"Using default workflow: {workflow.name}")
             else:
                 log_update(self.job_id, "Error: No default workflow found.")
                 job.status = 'failed'

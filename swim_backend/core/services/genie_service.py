@@ -23,8 +23,8 @@ from swim_backend.devices.models import GlobalCredential
 
 def create_genie_device(device, job_id_or_path):
     """
-    Creates a Genie Device object directly in memory.
-    This avoids Testbed object overhead and file I/O.
+    Build a Genie device connection object for pyATS automation.
+    No testbed files needed - builds config on the fly.
     Returns: (device_object, log_dir_path)
     """
     # Ensure directory exists for logs
@@ -37,7 +37,7 @@ def create_genie_device(device, job_id_or_path):
     password = device.password
     secret = device.secret
     
-    # Fallback to Global Credentials if device specific ones are missing
+    # Use global creds if nothing stored on device
     if not username or not password:
         global_creds = GlobalCredential.objects.first()
         if global_creds:
@@ -45,12 +45,12 @@ def create_genie_device(device, job_id_or_path):
             if not password: password = global_creds.password
             if not secret and global_creds.secret: secret = global_creds.secret
     
-    # Final check just to be safe (though username/password are effectively required)
+    # Sanity check - shouldn't hit this if DB is configured right
     if not username or not password:
         logger.warning(f"No credentials found for device {device.hostname} (and no global fallback).")
 
     try:
-        # Construct Testbed Dictionary
+        # Build testbed config dictionary (pyATS format)
         device_conf = {
             'os': device.platform if device.platform else 'iosxe',
             'type': device.family.lower() if hasattr(device, 'family') else 'switch',
@@ -68,6 +68,7 @@ def create_genie_device(device, job_id_or_path):
             }
         }
         
+        # Add enable secret if we have one
         if secret:
             device_conf['credentials']['enable'] = {'password': secret}
             

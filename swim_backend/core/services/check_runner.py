@@ -71,5 +71,5 @@ def run_standalone_check(check_run_id):
                 genie_dev.disconnect()
             except Exception as disconnect_e:
                 # Log or handle disconnect error if necessary, but don't fail the main process
-                # For now, just pass as per the user's provided structure
+                # Just pass as per provided structure
                 pass

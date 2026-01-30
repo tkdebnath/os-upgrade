@@ -20,10 +20,8 @@ class FileSystemService:
         if protocol in ['http', 'https']:
             return FileSystemService._list_http(server, path)
         elif protocol == 'ftp':
-            # Placeholder for future
             pass
         elif protocol == 'sftp':
-            # Placeholder for future
             pass
             
         return []

@@ -3,7 +3,7 @@ from swim_backend.devices.models import Device, Site, DeviceModel
 import random
 
 class Command(BaseCommand):
-    help = 'Seeds dummy C9300Uxm devices with various software versions'
+    help = 'Seeds C9300Uxm devices with various software versions for testing'
 
     def handle(self, *args, **options):
         versions = ['17.9.4a', '16.12.5', '17.6.3', '17.3.4', '17.9.2']

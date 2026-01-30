@@ -13,7 +13,8 @@ from swim_backend.devices.views import (
 from swim_backend.images.views import ImageViewSet, FileServerViewSet
 from swim_backend.core.views import (
     JobViewSet, GoldenImageViewSet, ValidationCheckViewSet, 
-    CheckRunViewSet, DashboardViewSet, WorkflowViewSet, WorkflowStepViewSet
+    CheckRunViewSet, DashboardViewSet, WorkflowViewSet, WorkflowStepViewSet,
+    ZTPWorkflowViewSet
 )
 from swim_backend.core.auth_views import (
     UserPermissionsView, LoginView, LogoutView, GetCSRFTokenView
@@ -79,6 +80,7 @@ def core_api_root(request, format=None):
         'check-runs': request.build_absolute_uri(reverse('core-checkrun-list')),
         'activity-logs': request.build_absolute_uri(reverse('core-activitylog-list')),
         'reports': request.build_absolute_uri(reverse('core-report-list')),
+        'ztp-workflows': request.build_absolute_uri(reverse('core-ztpworkflow-list')),
     })
 
 
@@ -135,6 +137,7 @@ core_router.register(r'check-runs', CheckRunViewSet, basename='core-checkrun')
 core_router.register(r'dashboard', DashboardViewSet, basename='core-dashboard')
 core_router.register(r'activity-logs', ActivityLogViewSet, basename='core-activitylog')
 core_router.register(r'reports', ReportViewSet, basename='core-report')
+core_router.register(r'ztp-workflows', ZTPWorkflowViewSet, basename='core-ztpworkflow')
 
 # Users Router - Authentication & Authorization
 users_router = routers.DefaultRouter()

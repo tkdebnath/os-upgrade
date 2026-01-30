@@ -7,10 +7,10 @@ logger = logging.getLogger(__name__)
 
 def check_readiness(device, job):
     """
-    Performs real readiness checks on the device:
-    1. Flash Space (sufficient for image * 2.5)
-    2. Config Register (0x2102)
-    3. Connection Health
+    Pre-upgrade checks before touching the device:
+    1. Flash space (need 2.5x the IOS image size)
+    2. Config register (should be 0x2102)
+    3. SSH connectivity
     """
     logger.info(f"Running readiness checks for {device.hostname}")
     log_update(job.id, f"Initiating readiness checks for {device.hostname}...")
@@ -35,16 +35,17 @@ def check_readiness(device, job):
 
     try:
         # 2. Flash Memory Check
-        # Requirement: Image Size * 2.5 (Safety margin for expand/install)
+        # Need 2.5x image size (room for extraction + old file)
         log_update(job.id, "Checking Flash Memory space...")
         image_size = job.image.size_bytes if job.image else 0
         required_space = image_size * 2.5
         
+        # Run 'dir flash:' to see available space
         cmd_dir = "dir flash:"
         output_dir = dev.execute(cmd_dir)
         
-        # Regex to find free bytes (e.g. "2144321536 bytes free")
-        # Pattern varies, but typically ending line: "21474836480 bytes total (2144321536 bytes free)"
+        # Parse output for free bytes - format varies by IOS version
+        # Typical: "21474836480 bytes total (2144321536 bytes free)"
         match_free = re.search(r'\((\d+)\s+bytes free\)', output_dir)
         
         if match_free:
@@ -55,15 +56,15 @@ def check_readiness(device, job):
             if free_bytes > required_space:
                  checks["flash_memory"] = {
                      "status": "success",
-                     "message": f"Free: {free_mb:.2f}MB (Required: {req_mb:.2f}MB)"
+                     "message": f"Enough space: {free_mb:.2f}MB free (Need {req_mb:.2f}MB)"
                  }
-                 log_update(job.id, f"Flash Check Passed: {free_mb:.2f}MB free.")
+                 log_update(job.id, f"Flash Check Passed: {free_mb:.2f}MB available.")
             else:
                  checks["flash_memory"] = {
                      "status": "failed",
-                     "message": f"Insufficient Flash. Free: {free_mb:.2f}MB, Required: {req_mb:.2f}MB. Manual Intervention Required."
+                     "message": f"Not enough flash! Only {free_mb:.2f}MB free, need {req_mb:.2f}MB. Clean up flash first."
                  }
-                 log_update(job.id, f"Flash Check Failed: Only {free_mb:.2f}MB free.")
+                 log_update(job.id, f"Flash Check Failed: Only {free_mb:.2f}MB available.")
         else:
              checks["flash_memory"] = {
                  "status": "warning",
@@ -129,14 +130,7 @@ def check_readiness(device, job):
         except:
             pass
 
-    # Custom Checks - For now, these are placeholder logic in previous version.
-    # User requested removal of mock data.
-    # Real custom checks logic should be implemented here or this block removed.
-    pass
-
     # Calculate overall readiness
-    # User Request: If free space is less -> Manual Intervention Required (Fail)
-    # Registry/Startup -> Warning (Pass with Warning)
     
     # We fail ONLY if there is a 'failed' status. 'warning' is acceptable.
     has_failures = any(c.get('status') == 'failed' for c in checks.values())

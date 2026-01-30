@@ -21,8 +21,8 @@ class Command(BaseCommand):
             )
             
         # 2. Categorize existing non-genie checks as 'script'
-        # Assume anything not 'genie' is 'script' for now if category is missing or 'standard'
-        # But let's be explicit about the standard ones we added before if they exist
+        # Default to 'script' category if not 'genie'
+        # Explicit about the standard checks added previously
         
         standard_scripts = [
             "Spanning Tree Summary", "CDP Neighbors", "Interface Check", 

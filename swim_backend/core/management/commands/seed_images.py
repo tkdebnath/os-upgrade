@@ -27,8 +27,7 @@ class Command(BaseCommand):
             {'filename': 'cat9k_iosxe.16.12.01.SPA.bin', 'version': '16.12.1', 'path': '/cat9k/16.12.1/cat9k_iosxe.16.12.01.SPA.bin'},
             {'filename': 'isr4400-universalk9.17.03.04a.SPA.bin', 'version': '17.3.4a', 'path': '/isr4k/17.3.4a/isr4400-universalk9.17.03.04a.SPA.bin'},
             {'filename': 'c9800-universalk9.17.09.03.SPA.bin', 'version': '17.9.3', 'path': '/wlc/17.9.3/c9800-universalk9.17.09.03.SPA.bin'},
-            # Exact match for the device we saw earlier which had "(Mock)" in version if we want to test exact match? 
-            # But usually images don't have (Mock) in version string. We should probably stick to realistic versions.
+
              {'filename': 'cat9k_iosxe.17.09.04a.Mock.bin', 'version': '17.9.4a (Mock)', 'path': '/cat9k/17.9.4a/cat9k_iosxe.17.09.04a.Mock.bin'},
         ]
 

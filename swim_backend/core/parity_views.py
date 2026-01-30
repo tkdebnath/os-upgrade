@@ -32,10 +32,9 @@ class SwimParityView(APIView):
 
     def tag_golden(self, request):
         """POST /image/importation/golden"""
-        # Expected body: { "image_id": 1, "platform": "switch", "site": "Global" }
         image_id = request.data.get('image_id')
         platform = request.data.get('platform', 'iosxe')
-        site_id = request.data.get('site_id', 'Global') # Simulating site ID as string name for prototype
+        site_id = request.data.get('site_id', 'Global')
         
         image = get_object_or_404(Image, id=image_id)
         
@@ -75,8 +74,6 @@ class SwimParityView(APIView):
         
     def trigger_activation(self, request):
         """POST /image/activation/device"""
-        # Logic to find the distributed job or creating a new activation-only job
-        # For prototype simplicity, assuming we continue the existing job or find pending one
         device_id = request.data.get('device_id')
         device = get_object_or_404(Device, id=device_id)
         
@@ -105,13 +102,10 @@ class SwimParityView(APIView):
         return Response({"golden": is_golden})
 
     def delete_golden_tag(self, request, site_id, family_id, role_id, image_id):
-         """DELETE /image/importation/golden/..."""
-         deleted, _ = GoldenImage.objects.filter(
+        """DELETE /image/importation/golden/..."""
+        deleted, _ = GoldenImage.objects.filter(
             site=site_id,
             platform=family_id,
             image__id=image_id
-         ).delete()
-         return Response({"status": "deleted" if deleted else "not_found"})
-
-# Dispatcher methods to route based on URL structure if using class-based logic
-# or we can bind these specific methods in urls.py
+        ).delete()
+        return Response({"status": "deleted" if deleted else "not_found"})

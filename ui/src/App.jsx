@@ -24,6 +24,7 @@ import UserManagement from './features/admin/UserManagement';
 import GroupManagement from './features/admin/GroupManagement';
 import PermissionList from './features/admin/PermissionList';
 import PermissionBundles from './features/admin/PermissionBundles';
+import ZTPManagement from './pages/ZTPManagement';
 import { AuthProvider } from './context/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import AdminOnlyRoute from './components/AdminOnlyRoute';
@@ -54,6 +55,7 @@ function App() {
             <Route path="standards" element={<ModelsList />} />
             <Route path="upgrade" element={<UpgradeWizard />} />
             <Route path="workflows" element={<AdminOnlyRoute><WorkflowEditor /></AdminOnlyRoute>} />
+            <Route path="ztp" element={<ZTPManagement />} />
             <Route path="admin" element={<AdminOnlyRoute><AdminPanel /></AdminOnlyRoute>} />
             <Route path="admin/users" element={<AdminOnlyRoute><UserManagement /></AdminOnlyRoute>} />
             <Route path="admin/groups" element={<AdminOnlyRoute><GroupManagement /></AdminOnlyRoute>} />

@@ -8,7 +8,7 @@ import io
 from .plugins.registry import PluginRegistry
 from swim_backend.core.services.sync_service import run_sync_task
 
-# Import ImageSerializer from views, not models
+# Pull Image details from images app
 from swim_backend.images.views import ImageSerializer
 
 class DeviceModelSerializer(serializers.ModelSerializer):
@@ -37,7 +37,7 @@ class GlobalCredentialSerializer(serializers.ModelSerializer):
 class GlobalCredentialViewSet(viewsets.ViewSet):
     
     def get_permissions(self):
-        """Only superusers can access global credentials"""
+        """Only admins can see/change global device credentials"""
         from rest_framework.permissions import BasePermission
         
         class IsSuperUser(BasePermission):
@@ -405,9 +405,9 @@ class DeviceViewSet(viewsets.ModelViewSet):
                 # If no connection key, assume it passed connected phase if we got results, or implicit pass?
                 # Actually check_readiness returns connection failure explicitly if it fails.
                 # If key missing, implies connection was fine? 
-                # Let's assume explicit keys in new readiness.py? 
+                # Assume explicit keys in new readiness.py
                 # Actually readiness.py ONLY adds 'connection' on failure.
-                # If connected successfully, we should add a Pass.
+                # Connected successfully, adding Pass.
                 pass 
             
             # Logic: If readiness.py returned, connection succeeded unless it returned early.
@@ -530,38 +530,11 @@ class DeviceViewSet(viewsets.ModelViewSet):
                  continue
 
             # Build Execution Plan from Workflow
-            # We want to INCLUDE 'Readiness' (marked success) and 'Distribution' (pending)
-            # And potentially others as 'pending' but Engine will stop after Distribution?
-            # Actually, this is 'distribute_image' endpoint. The user might want to STOP after distribution?
-            # The Wizard typically runs Distribution, then stops for the user to click 'Next'.
-            # So we should probably ONLY include up to Distribution?
-            # User requirement: "job process is not displaying all steps from the selected workflow"
-            # This implies they want to see the FULL workflow in the job details, even if we only run part of it?
-            # But if we create a job and it finishes Distribution, does it mark the job as 'completed'?
-            # If the job finishes all PENDING steps, it completes.
-            # So if we add 'Activation' as pending, the engine will run it immediately!
-            # We don't want that. We want to PAUSE or separate jobs.
-            # IN THE WIZARD: Distribution is a distinct "Apply" action. 
-            # Step 4 (Distribute) -> Button "Start Distribution".
-            # Step 5 (Activation) -> Button "Activate".
-            # These are SEPARATE actions creating SEPARATE jobs usually, OR resuming?
-            # Current architecture creates NEW jobs for each action (distribute_image, activate_image).
-            # So for 'distribute_image' job, we want it to EXECUTE Distribution.
-            # If we include 'Activation' step in this job, the engine WILL execute it unless we mark it 'skipped' or 'on_hold'?
-            # Our engine doesn't support 'on_hold'.
-            # SO: We should include readiness (success) and distribution (pending).
-            # What about subsequent steps? If we omit them, the user complains "not displaying all steps".
-            # BUT if we include them, they might run.
-            
-            # compromise: The 'distribute_image' action implies we only want to DO distribution.
-            # If the user wants to see the full workflow, maybe the UI should show the workflow definition, not just the job steps?
-            # OR, we add them but with a status that the engine ignores? "future"?
-            # Engine loops through `execution_plan`.
-            # If we don't put them in `job.steps` (the history), the UI won't show them if it only reads `job.steps`.
+            # Include readiness (success) and distribution (pending).
             # If the UI reads `job.workflow.steps`, it would show everything.
             # The issue says: "job process is not displaying all steps... during activation" and "redundant readiness... during distribution".
             
-            # Let's focus on Distribution Job first.
+            # Focus on Distribution Job first.
             # It should show Readiness (Completed) + Distribution (Running).
             # Logic: Include everything UP TO 'distribution'.
             # Mark ALL as 'pending' so they run (as requested by user to "re-enable... not skip").
@@ -778,7 +751,7 @@ class DeviceViewSet(viewsets.ModelViewSet):
         # If schedule_time is set, the status logic above handled it (Scheduled jobs wait for DB Poller).
         # We only need orchestrator if running NOW.
         # BUT, orchestrate_jobs also handles setting 'scheduled' status if passed?
-        # Let's check logic. Actually with my new Scheduler, I rely on the DB Poller for scheduled jobs.
+        # DB Poller for scheduled jobs.
         # So I only need to manually trigger IF NO SCHEDULE TIME.
         
         if not schedule_time:
@@ -922,12 +895,12 @@ class DeviceViewSet(viewsets.ModelViewSet):
                      # Usually update_or_create on hostname allows IP change, but if hostname is different and IP exists, it's a conflict.
                      # However, if we use update_or_create on hostname, and the matching hostname has this IP, it's fine.
                      # But if a DIFFERENT hostname has this IP, it's a duplicate.
-                     # For simplicity/safety based on "no duplication", let's skip if IP exists and doesn't match the current hostname (if provided).
+                     # For safety based on no duplication, skip if IP exists and doesn't match hostname.
                      
                      # Actually, standard behavior for "import" often implies "create new". 
                      # If I use update_or_create by hostname, I might overwrite. 
                      # But if IP exists on *another* device, that's bad.
-                     # Let's check strict IP uniqueness for now.
+                     # Check strict IP uniqueness.
                      
                      # Edge case: If updating an existing device, IP might match itself.
                      # We use hostname as lookup key.

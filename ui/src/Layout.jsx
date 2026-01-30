@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { NavLink, Outlet, Link, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Server, Activity, Settings, List, HardDrive, Lock, Shield, Calendar, Map, LogOut, UserCog, User } from 'lucide-react';
+import { LayoutDashboard, Server, Activity, Settings, List, HardDrive, Lock, Shield, Calendar, Map, LogOut, UserCog, User, Zap } from 'lucide-react';
 import axios from 'axios';
 import { useAuth } from './context/AuthContext';
 
@@ -76,6 +76,11 @@ const Layout = () => {
                     {(can('core.view_checkrun') || user.is_superuser) && (
                         <SidebarItem to="/checks" icon={Shield} label="Compliance Checks" />
                     )}
+
+                    <div className="pt-4">
+                        <p className="px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Automation</p>
+                        <SidebarItem to="/ztp" icon={Zap} label="Zero Touch Prov." />
+                    </div>
 
                     <div className="pt-6">
                         <p className="px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">System</p>

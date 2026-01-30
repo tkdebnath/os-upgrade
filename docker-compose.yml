@@ -13,13 +13,26 @@ services:
       - ./static:/app/static
     environment:
       - DJANGO_SETTINGS_MODULE=swim_backend.settings
-      - DEBUG=True
-      - ALLOWED_HOSTS=*
+      - DEBUG=${DEBUG:-False}
+      - ALLOWED_HOSTS=${ALLOWED_HOSTS:-localhost,127.0.0.1,backend}
+      - SECRET_KEY=${SECRET_KEY:-change-this-in-production}
+      - DATABASE_URL=${DATABASE_URL:-sqlite:///db.sqlite3}
+      # LDAP settings (optional - configure in .env.ldap)
+      - LDAP_SERVER_URI=${LDAP_SERVER_URI:-}
+      - LDAP_BIND_DN=${LDAP_BIND_DN:-}
+      - LDAP_BIND_PASSWORD=${LDAP_BIND_PASSWORD:-}
+      - LDAP_USER_SEARCH_BASE=${LDAP_USER_SEARCH_BASE:-}
     ports:
       - "8000:8000"
     networks:
       - swim-network
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/api/', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
   frontend:
     build:
@@ -27,12 +40,19 @@ services:
       dockerfile: Dockerfile
     container_name: swim-frontend
     ports:
-      - "80:80"
+      - "${FRONTEND_PORT:-80}:80"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     networks:
       - swim-network
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:80/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
 
 networks:
   swim-network:

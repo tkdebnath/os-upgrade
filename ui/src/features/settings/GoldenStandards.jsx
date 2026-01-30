@@ -169,8 +169,8 @@ const GoldenStandards = () => {
                         <ArrowLeft size={20} />
                     </Link>
                     <div>
-                        <h1 className="text-2xl font-bold text-gray-800">Golden Image Standards</h1>
-                        <p className="text-sm text-gray-500">Define target versions and image files for each hardware model.</p>
+                        <h1 className="text-2xl font-bold text-gray-800">Golden IOS Standards</h1>
+                        <p className="text-sm text-gray-500">Set target IOS versions and image files for each switch/router model.</p>
                     </div>
                 </div>
                 <div>

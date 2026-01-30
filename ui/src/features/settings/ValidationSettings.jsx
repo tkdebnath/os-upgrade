@@ -67,32 +67,12 @@ const ValidationSettings = () => {
         e.preventDefault();
         setAdding(true);
         try {
-            // No auto-formatting prefixes, take user input as-is via 'genieModule' state (mapped to name/command)
-            // User requested: "don't add prefix 'learn' in genie learn module"
-            // We assume the user enters the NAME (e.g. "Ospf") and COMMAND (e.g. "learn ospf") 
-            // BUT the form only has "Genie Module" input currently.
-            // Let's adapt: "Genie Module" input -> Name. Make command implied or add input?
-            // "don't add prefix 'learn'" implies they want to type "learn ospf" themselves OR they just want the name "Ospf".
-            // Let's check the previous code: it generated command `learn ${module}`.
-
-            // To be safe and flexible: I will change the form to have Name and Command, pre-filled with defaults if possible, 
-            // OR just use the input for both but without forcing "learn".
-            // Re-reading request: "I can't delete name or module name, and also don't add prefix "learn" in genie learn module"
-
-            // Let's trust the user to type what they want.
-            // We'll treat the input as the Name (e.g. "Ospf") and default the command to `learn ${input}` but allow editing if I had a command field.
-            // Since I don't have a command field in the genie form, I'll add one OR simple logic:
-            // Input: "Ospf" -> Name: "Ospf", Command: "learn ospf" (Standard Genie pattern).
-            // Input: "learn ospf" -> Name: "Ospf", Command: "learn ospf".
-
-            // Actually, best approach based on "don't add prefix 'learn'":
-            // Just use the input value as the Name. 
-            // And for command? The backend runner usually needs `learn <feature>`.
-            // If the user says "don't add prefix", maybe they want to control the command fully.
-            // Let's default command to `learn ${input}` but remove "Genie Learn" from Name.
+            // Genie parser setup - use raw input for feature name
+            // Command gets passed directly to pyATS (e.g., 'ospf', 'bgp', 'interface')
+            // Backend handles the 'learn' wrapper when calling Genie
 
             const name = genieModule.trim();
-            const command = name.toLowerCase(); // User requested removing 'learn' prefix
+            const command = name.toLowerCase(); // Pass feature name to backend for parsing
 
             const res = await axios.post('/api/core/checks/', {
                 name: name, // Just the input, e.g. "Ospf"
@@ -120,7 +100,7 @@ const ValidationSettings = () => {
         <div className="max-w-5xl mx-auto p-6 space-y-8">
             <div>
                 <h1 className="text-2xl font-bold text-gray-800">Validation Configuration</h1>
-                <p className="text-gray-500 text-sm mt-1">Manage standard scripts and Genie learning modules used in Upgrade Activation.</p>
+                <p className="text-gray-500 text-sm mt-1">Configure show commands and pyATS Genie parsers for pre/post upgrade checks.</p>
             </div>
 
             {/* Tabs */}

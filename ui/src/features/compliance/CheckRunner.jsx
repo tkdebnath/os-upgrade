@@ -35,7 +35,7 @@ const Checks = () => {
 
     const fetchAvailableChecks = async () => {
         try {
-            // Filter only genie/script checks, maybe? For now create all allowed.
+            // Pull all validation checks (show commands and Genie parsers)
             const res = await axios.get('/api/core/checks/');
             setAvailableChecks(res.data.results || res.data);
         } catch (error) { console.error(error); }

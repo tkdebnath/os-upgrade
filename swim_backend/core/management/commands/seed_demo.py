@@ -3,25 +3,23 @@ from swim_backend.devices.models import Device, DeviceModel, Site
 from swim_backend.images.models import FileServer
 
 class Command(BaseCommand):
-    help = 'Seeds demo devices for distribution testing'
+    help = 'Seeds test devices for distribution testing'
 
     def handle(self, *args, **options):
-        # Ensure Site and Model exist
-        site, _ = Site.objects.get_or_create(name='Demo-Lab')
+        site, _ = Site.objects.get_or_create(name='Test-Lab')
         
-        # Create a Demo Model with specific Size/MD5
-        model, _ = DeviceModel.objects.get_or_create(name='C9300-Demo')
+        # Create model with specific Size/MD5
+        model, _ = DeviceModel.objects.get_or_create(name='C9300-Test')
         model.golden_image_version = '17.9.4a'
         model.golden_image_file = 'cat9k_iosxe.17.09.04a.SPA.bin'
-        model.golden_image_size = 450 * 1024 * 1024 # 450MB
+        model.golden_image_size = 450 * 1024 * 1024
         model.golden_image_md5 = '5d41402abc4b2a76b9719d911017c592'
         
-        # Ensure a file server exists
         fs, _ = FileServer.objects.get_or_create(
-            name='Demo-Server',
+            name='Test-Server',
             defaults={
                 'protocol': 'https',
-                'address': 'repo.demo.com',
+                'address': 'repo.test.local',
                 'port': 443,
                 'base_path': '/software/'
             }

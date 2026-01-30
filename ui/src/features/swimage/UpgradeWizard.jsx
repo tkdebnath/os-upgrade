@@ -199,17 +199,17 @@ const UpgradeWizard = () => {
                     <div className="w-8 h-px bg-gray-300"></div>
                     <div className={`flex items-center ${step >= 5 ? 'text-blue-600 font-bold' : 'text-gray-400'}`}>
                         <span className={`w-6 h-6 rounded-full flex items-center justify-center border mr-2 ${step >= 5 ? 'bg-blue-600 text-white border-blue-600' : 'border-gray-300'}`}>5</span>
-                        Distribution
+                        IOS Copy
                     </div>
                     <div className="w-8 h-px bg-gray-300"></div>
                     <div className={`flex items-center ${step >= 6 ? 'text-blue-600 font-bold' : 'text-gray-400'}`}>
                         <span className={`w-6 h-6 rounded-full flex items-center justify-center border mr-2 ${step >= 6 ? 'bg-blue-600 text-white border-blue-600' : 'border-gray-300'}`}>6</span>
-                        Checks
+                        Pre/Post Checks
                     </div>
                     <div className="w-8 h-px bg-gray-300"></div>
                     <div className={`flex items-center ${step >= 7 ? 'text-blue-600 font-bold' : 'text-gray-400'}`}>
                         <span className={`w-6 h-6 rounded-full flex items-center justify-center border mr-2 ${step >= 7 ? 'bg-blue-600 text-white border-blue-600' : 'border-gray-300'}`}>7</span>
-                        Execution
+                        Kick Off
                     </div>
                 </div>
             </div>
@@ -227,7 +227,7 @@ const UpgradeWizard = () => {
                                 <th className="p-4">IP Address</th>
                                 <th className="p-4">Family</th>
                                 <th className="p-4">Current Version</th>
-                                <th className="p-4">Target Image</th>
+                                <th className="p-4">Golden Image</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y">
@@ -244,7 +244,7 @@ const UpgradeWizard = () => {
                                                 <span className="text-gray-400">(v{dev.golden_image.version})</span>
                                             </div>
                                         ) : (
-                                            <span className="text-red-500 flex items-center"><AlertTriangle size={14} className="mr-1" /> No Standard</span>
+                                            <span className="text-red-500 flex items-center"><AlertTriangle size={14} className="mr-1" /> No Golden Image Set</span>
                                         )}
                                     </td>
                                 </tr>
@@ -451,10 +451,10 @@ const UpgradeWizard = () => {
             {step === 5 && (
                 <div className="bg-white rounded-lg shadow-sm border border-gray-200">
                     <div className="p-4 border-b border-gray-200 bg-gray-50 flex justify-between items-center">
-                        <h2 className="font-semibold text-gray-700">Software Distribution</h2>
+                        <h2 className="font-semibold text-gray-700">IOS File Copy to Devices</h2>
                         {distributing && (
                             <span className="text-xs font-mono bg-blue-100 text-blue-800 px-2 py-1 rounded infinite-pulse">
-                                Job Running...
+                                Copy In Progress...
                             </span>
                         )}
                     </div>
@@ -466,21 +466,21 @@ const UpgradeWizard = () => {
                                 <div className="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4 text-blue-600">
                                     <Server size={40} />
                                 </div>
-                                <h3 className="font-bold text-gray-800 text-lg">Distribution Phase</h3>
+                                <h3 className="font-bold text-gray-800 text-lg">IOS Copy Phase</h3>
                                 <p className="text-sm text-gray-600 mt-2 px-4">
-                                    Transfers the golden image to devices. <br />
-                                    Review results and select devices to proceed.
+                                    Copy golden IOS file to device flash. <br />
+                                    Review results and select devices for reload.
                                 </p>
                             </div>
 
                             {!distributing ? (
                                 <button onClick={() => startDistribution()} className="w-full max-w-xs px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded shadow-lg font-bold flex items-center justify-center">
-                                    Start Distribution
+                                    Start IOS Copy
                                 </button>
                             ) : (
                                 <div className="text-center w-full space-y-4">
                                     <div className="text-sm font-semibold text-blue-600 flex items-center justify-center">
-                                        <Loader size={16} className="animate-spin mr-2" /> Distribution Active
+                                        <Loader size={16} className="animate-spin mr-2" /> Copying IOS Files
                                     </div>
                                     <button
                                         onClick={() => {
@@ -494,10 +494,10 @@ const UpgradeWizard = () => {
                                         }}
                                         className="w-full max-w-xs px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded shadow-lg font-bold flex items-center justify-center"
                                     >
-                                        Next: Activation <ArrowRight size={16} className="ml-2" />
+                                        Next: Reload <ArrowRight size={16} className="ml-2" />
                                     </button>
                                     <p className="text-xs text-gray-400">
-                                        Proceed only with successfully distributed devices.
+                                        Only proceed with devices that completed IOS copy.
                                     </p>
                                 </div>
                             )}
@@ -703,7 +703,7 @@ const UpgradeWizard = () => {
                                             onChange={() => setScheduleMode(false)}
                                             className="text-blue-600"
                                         />
-                                        <span className="text-sm font-medium text-gray-700">Execute Immediately</span>
+                                        <span className="text-sm font-medium text-gray-700">Kick Off Now</span>
                                     </label>
                                     <label className="flex items-center space-x-2 cursor-pointer">
                                         <input
@@ -713,7 +713,7 @@ const UpgradeWizard = () => {
                                             onChange={() => setScheduleMode(true)}
                                             className="text-blue-600"
                                         />
-                                        <span className="text-sm font-medium text-gray-700">Schedule for Later</span>
+                                        <span className="text-sm font-medium text-gray-700">Schedule Maintenance Window</span>
                                     </label>
 
                                     {scheduleMode && (
@@ -738,7 +738,7 @@ const UpgradeWizard = () => {
                         {/* Middle: Execution Order */}
                         <div className="border border-gray-200 rounded-lg overflow-hidden">
                             <div className="bg-gray-50 px-4 py-2 border-b border-gray-200 flex justify-between items-center">
-                                <h3 className="font-bold text-gray-700 text-sm">Execution Order</h3>
+                                <h3 className="font-bold text-gray-700 text-sm">Reload Order</h3>
                                 <span className="text-xs text-gray-500">Drag to reorder or use arrows (Sequential only)</span>
                             </div>
                             <div className="flex h-64">

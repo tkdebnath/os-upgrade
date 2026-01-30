@@ -163,6 +163,54 @@ class CheckRun(models.Model):
         return f"CheckRun: {self.validation_check.name} on {self.device.hostname}"
 
 
+class ZTPWorkflow(models.Model):
+    """Zero Touch Provisioning workflow - devices call in and get auto-provisioned"""
+    STATUS_CHOICES = [
+        ('active', 'Active'),
+        ('paused', 'Paused'),
+        ('completed', 'Completed'),
+        ('archived', 'Archived'),
+    ]
+    
+    name = models.CharField(max_length=100)
+    description = models.TextField(blank=True)
+    workflow = models.ForeignKey(Workflow, on_delete=models.PROTECT, null=True, blank=True, help_text="Upgrade workflow to use for auto-provisioning")
+    
+    # Optional filters - if set, only devices matching these will be auto-provisioned
+    target_site = models.ForeignKey('devices.Site', on_delete=models.SET_NULL, null=True, blank=True, help_text="Restrict to specific site (optional)")
+    device_family_filter = models.CharField(max_length=50, blank=True, help_text="Filter by device family (optional)")
+    platform_filter = models.CharField(max_length=50, blank=True, help_text="Filter by platform (optional)")
+    model_filter = models.ForeignKey('devices.DeviceModel', on_delete=models.SET_NULL, null=True, blank=True, help_text="Filter by model (optional)")
+    
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='active')
+    devices_provisioned = models.ManyToManyField(Device, blank=True, related_name='ztp_workflows')
+    
+    # Validation Checks
+    precheck_validations = models.ManyToManyField(ValidationCheck, blank=True, related_name='ztp_prechecks', limit_choices_to={'check_type__in': ['pre', 'both']}, help_text="Pre-checks to run before provisioning")
+    postcheck_validations = models.ManyToManyField(ValidationCheck, blank=True, related_name='ztp_postchecks', limit_choices_to={'check_type__in': ['post', 'both']}, help_text="Post-checks to run after provisioning")
+    
+    # Progress tracking
+    total_devices = models.IntegerField(default=0, help_text="Total devices processed")
+    completed_devices = models.IntegerField(default=0)
+    failed_devices = models.IntegerField(default=0)
+    skipped_devices = models.IntegerField(default=0, help_text="Devices skipped (already compliant or no golden image)")
+    
+    # Webhook URL for external integration (optional)
+    webhook_token = models.CharField(max_length=100, blank=True, help_text="Secret token for webhook authentication")
+    
+    created_by = models.ForeignKey('auth.User', on_delete=models.SET_NULL, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'ZTP Workflow'
+        verbose_name_plural = 'ZTP Workflows'
+    
+    def __str__(self):
+        return f"{self.name} - {self.status}"
+
+
 class ActivityLog(models.Model):
     """Track all user actions for audit purposes"""
     ACTION_CHOICES = [

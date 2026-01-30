@@ -86,10 +86,10 @@ const Jobs = () => {
     };
 
     const getStatusText = (job) => {
-        if (job.status === 'running') return "Estimating Progress...";
-        if (job.status === 'distributing') return "Distribution in progress...";
-        if (job.status === 'activating') return `Activating ${job.image_filename}...`;
-        if (job.status === 'distributed') return "Distribution Complete";
+        if (job.status === 'running') return "Upgrade in progress...";
+        if (job.status === 'distributing') return "Copying IOS to flash...";
+        if (job.status === 'activating') return `Reloading with ${job.image_filename}...`;
+        if (job.status === 'distributed') return "IOS Copy Complete";
         if (job.status === 'success') return "Success";
         if (job.status === 'failed') return "Failed";
         if (job.status === 'cancelled') return "Cancelled";
@@ -116,7 +116,7 @@ const Jobs = () => {
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
                     <div className="bg-white rounded-lg shadow-xl w-3/4 h-3/4 flex flex-col p-6">
                         <div className="flex justify-between items-center mb-4">
-                            <h3 className="text-lg font-bold">Execution Logs - {selectedJobLogs.device_hostname}</h3>
+                            <h3 className="text-lg font-bold">Job Logs - {selectedJobLogs.device_hostname}</h3>
                             <button onClick={() => setSelectedJobLogs(null)} className="text-gray-500 hover:text-gray-700">
                                 <XCircle size={24} />
                             </button>
@@ -147,7 +147,7 @@ const Jobs = () => {
             {/* Main Content */}
             <div className="flex-1 min-w-0 flex flex-col h-full bg-gray-50/50">
                 <div className="p-6 border-b border-gray-200 bg-white">
-                    <h1 className="text-xl font-bold text-gray-800 mb-4">Devices Updates</h1>
+                    <h1 className="text-xl font-bold text-gray-800 mb-4">IOS Upgrade Jobs</h1>
 
                     {/* Status Pills */}
                     <div className="flex items-center space-x-2 text-sm overflow-x-auto pb-2">

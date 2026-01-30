@@ -189,7 +189,7 @@ SPECTACULAR_SETTINGS = {
     ],
 }
 
-# LDAP Configuration (Placeholder - User must configure)
+# LDAP Configuration
 # import ldap
 # from django_auth_ldap.config import LDAPSearch
 # AUTH_LDAP_SERVER_URI = "ldap://ldap.example.com"

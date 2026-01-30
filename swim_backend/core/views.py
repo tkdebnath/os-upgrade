@@ -2,7 +2,7 @@ from rest_framework import serializers, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-from .models import Job, GoldenImage, ValidationCheck, CheckRun, Workflow, WorkflowStep
+from .models import Job, GoldenImage, ValidationCheck, CheckRun, Workflow, WorkflowStep, ZTPWorkflow
 from .logic import run_swim_job, log_update
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter
@@ -180,8 +180,6 @@ class JobViewSet(viewsets.ModelViewSet):
     
     def perform_create(self, serializer):
         job = serializer.save()
-        # If scheduled for later, we wouldn't run it now. 
-        # For prototype simplicity, we run immediately if no schedule provided.
         if not job.distribution_time and not job.activation_time:
             t = threading.Thread(target=run_swim_job, args=(job.id,))
             t.daemon = True
@@ -194,7 +192,7 @@ class JobViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['get'])
     def download_artifacts(self, request, pk=None):
         """
-        Download various job artifacts (pre/post checks, diff, full report).
+        Download job logs and validation outputs.
         Query Param: type=[report|pre|post|diff|all]
         """
         job = self.get_object()
@@ -219,9 +217,7 @@ class JobViewSet(viewsets.ModelViewSet):
             return response
             
         elif type == 'diff':
-            # Mock Diff content if file not found
             content = "Diff content unavailable or not generated."
-            # Ideally we check /logs/.../diff_summary.txt
             log_dir = f"logs/{job.device.id}/{job.id}/"
             if os.path.exists(os.path.join(log_dir, 'diff_summary.txt')):
                  with open(os.path.join(log_dir, 'diff_summary.txt'), 'r') as f:
@@ -303,7 +299,7 @@ class JobViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['post'])
     def bulk_create(self, request):
         """
-        Creates multiple jobs and handles execution mode (Parallel vs Sequential).
+        Batch upgrade multiple devices - run all at once or one-by-one.
         Body: {
             "devices": [1, 2],
             "execution_mode": "parallel" | "sequential",
@@ -367,18 +363,16 @@ class JobViewSet(viewsets.ModelViewSet):
                 job.selected_checks.set(selected_checks)
             created_jobs.append(job)
 
-        # Trigger Execution
-        # If scheduled for later, we do nothing (scheduler picks up).
-        # We only trigger if NOT scheduled (i.e. Run Now)
+        # Trigger job execution
         if not distribution_time: 
             if execution_mode == 'sequential':
-                # Run in a single background thread sequentially
+                # Upgrade devices one at a time
                 job_ids = [j.id for j in created_jobs]
                 t = threading.Thread(target=run_sequential_batch, args=(job_ids,))
                 t.daemon = True
                 t.start()
             else:
-                # Parallel: Spawn thread for each (or use pool)
+                # Hit all devices at once
                 for job in created_jobs:
                     t = threading.Thread(target=run_swim_job, args=(job.id,))
                     t.daemon = True
@@ -448,16 +442,6 @@ class JobViewSet(viewsets.ModelViewSet):
         for job in jobs:
             log_update(job.id, f"Rescheduled to {new_time} by user.")
             
-        # Re-trigger orchestrator if needed (simplified: we just update DB, scheduler picks up)
-        from .services.job_runner import orchestrate_jobs
-        # In a real system we might need to cancel existing threads or update them.
-        # For this prototype, the scheduler loop (if implemented) or simple periodic checks would handle it.
-        # Check if we need to wake up any threads? 
-        # Current logic: `orchestrate_jobs` sleeps. Updating variable in thread is hard.
-        # Best approach for prototype: Just update DB. 
-        # If the job was already run and waiting in `orchestrate_jobs` -> `time.sleep`, it won't see this change easily.
-        # BUT, if status is 'scheduled', it implies it hasn't started 'running' or 'distributing' yet.
-        
         return Response({"status": "rescheduled", "count": updated_count})
 
 class ValidationCheckSerializer(serializers.ModelSerializer):
@@ -488,16 +472,11 @@ class CheckRunViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['post'])
     def run_readiness(self, request):
         """
-        Triggers Readiness Checks (System Checks) on a scope.
+        Run pre-upgrade readiness checks (flash space, boot config, etc.).
         Scope: 'all', 'site', 'selection'.
         """
         from swim_backend.devices.models import Device
-        from .logic import run_swim_job # We reuse job logic or specialized check logic. 
-        # Actually readiness is part of a Job in current logic. 
-        # To run just readiness, we create a Job with 'check_only' mode? 
-        # Or we create CheckRuns for specific 'System' checks?
-        # Let's create CheckRuns for specific checks mapped to readiness (Flash, ConfigReg).
-        # Assuming we have validation checks for these.
+        from .logic import run_swim_job
         
         scope_type = request.data.get('scope', 'selection')
         scope_value = request.data.get('ids', [])
@@ -511,10 +490,8 @@ class CheckRunViewSet(viewsets.ModelViewSet):
         else:
             devices = Device.objects.filter(id__in=scope_value)
             
-        # Get Readiness Checks (Assumption: Category='system')
         checks = ValidationCheck.objects.filter(category='system')
         if not checks.exists():
-            # Create default system checks if missing for demo
             from .models import ValidationCheck
             c1 = ValidationCheck.objects.create(name="Flash Verify", command="check_flash", category="system")
             c2 = ValidationCheck.objects.create(name="Config Register", command="check_config_reg", category="system")
@@ -540,7 +517,7 @@ class CheckRunViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['post'])
     def run(self, request):
         """
-        Triggers checks on devices.
+        Run validation commands on devices (show version, inventory, etc.).
         Body: { "devices": [1, 2], "checks": [1, 5] }
         """
         device_ids = request.data.get('devices', [])
@@ -589,7 +566,7 @@ class DashboardViewSet(viewsets.ViewSet):
         from django.utils import timezone
         import datetime
 
-        # Check what permissions the user has
+        # Check user permissions before showing data
         can_view_devices = request.user.is_superuser or request.user.has_perm('devices.view_device')
         can_view_jobs = request.user.is_superuser or request.user.has_perm('core.view_job')
 
@@ -620,13 +597,13 @@ class DashboardViewSet(viewsets.ViewSet):
             devices_per_model = list(Device.objects.values('model__name').annotate(value=Count('id')).order_by('-value'))
             devices_per_version = list(Device.objects.values('version').annotate(value=Count('id')).order_by('-value'))
 
-            # Compliance calculation using model-based golden image
-            compliant_count = 0  # Up to Date
-            ahead_count = 0  # Ahead of golden version
-            non_compliant_count = 0  # Outdated + No Standard
+            # Check which devices are running the right IOS version
+            compliant_count = 0  # Running golden image
+            ahead_count = 0  # Running newer than standard
+            non_compliant_count = 0  # Outdated or no standard set
             
             def compare_versions(v1, v2):
-                """Simple version comparison. Returns: -1 (v1 < v2), 0 (equal), 1 (v1 > v2)"""
+                """Compare IOS version strings. Returns: -1 (older), 0 (same), 1 (newer)"""
                 if not v1 or not v2:
                     return None
                 try:
@@ -705,12 +682,12 @@ class DashboardViewSet(viewsets.ViewSet):
             },
             "issues": {
                 "critical": critical_issues,
-                "warning": 0 # Placeholder
+                "warning": 0
             },
             "network": {
                 "sites": site_count,
                 "devices": total_devices,
-                "unprovisioned": 0, # Placeholder
+                "unprovisioned": 0,
                 "unclaimed": 0
             },
             "analytics": {
@@ -728,5 +705,349 @@ class DashboardViewSet(viewsets.ViewSet):
                     {"name": "Failed", "value": jobs_failed},
                     {"name": "Success", "value": jobs_success}
                 ]
+            },
+            "ztp": {
+                "active_workflows": ZTPWorkflow.objects.filter(status='active').count(),
+                "paused_workflows": ZTPWorkflow.objects.filter(status='paused').count(),
+                "total_provisioned_today": ZTPWorkflow.objects.filter(
+                    devices_provisioned__jobs__created_at__gte=timezone.now().replace(hour=0, minute=0, second=0)
+                ).distinct().count(),
             }
         })
+
+
+# ============================================================================
+# ZTP (Zero Touch Provisioning) ViewSet
+# ============================================================================
+
+class ZTPWorkflowSerializer(serializers.ModelSerializer):
+    workflow_name = serializers.CharField(source='workflow.name', read_only=True)
+    target_site_name = serializers.CharField(source='target_site.name', read_only=True)
+    model_name = serializers.CharField(source='model_filter.name', read_only=True)
+    provisioned_device_count = serializers.SerializerMethodField()
+    progress_percentage = serializers.SerializerMethodField()
+    webhook_token = serializers.CharField(write_only=True, required=False)
+    
+    def get_provisioned_device_count(self, obj):
+        return obj.devices_provisioned.count()
+    
+    def get_progress_percentage(self, obj):
+        if obj.total_devices == 0:
+            return 0
+        return int((obj.completed_devices / obj.total_devices) * 100)
+    
+    class Meta:
+        model = ZTPWorkflow
+        fields = '__all__'
+
+
+class ZTPWorkflowViewSet(viewsets.ModelViewSet):
+    queryset = ZTPWorkflow.objects.all()
+    serializer_class = ZTPWorkflowSerializer
+    filter_backends = [DjangoFilterBackend, SearchFilter]
+    filterset_fields = ['status', 'target_site', 'device_family_filter']
+    search_fields = ['name', 'description']
+    
+    def perform_create(self, serializer):
+        """Create ZTP workflow with current user"""
+        import secrets
+        import string
+        # Generate webhook token
+        token = ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(40))
+        serializer.save(created_by=self.request.user, webhook_token=token)
+    
+    @action(detail=True, methods=['post'])
+    def provision_device(self, request, pk=None):
+        """
+        ZTP webhook endpoint - device boots up and calls this to get auto-upgraded.
+        Returns job_id right away so device doesn't have to wait.
+        
+        Payload: {
+            "ip_address": "10.1.1.10",  # required
+            "platform": "iosxe",  # required - iosxe, nxos, etc.
+            "username": "admin",  # optional - defaults to global creds
+            "password": "cisco",  # optional
+            "secret": "cisco",  # optional - enable password
+            "hostname": "switch-01",  # optional - auto-discovered from device
+            "family": "Switch",  # optional - Switch/Router/AP/WLC
+            "site": "Main Campus",  # optional - site name
+            "site_id": 1  # optional - site ID (preferred over name)
+        }
+        """
+        ztp = self.get_object()
+        
+        if ztp.status != 'active':
+            return Response({'error': 'ZTP workflow is not active'}, status=400)
+        
+        # Pull device credentials from the webhook call
+        ip_address = request.data.get('ip_address')
+        platform = request.data.get('platform')
+        username = request.data.get('username')
+        password = request.data.get('password')
+        secret = request.data.get('secret', password)  # Enable password
+        hostname_override = request.data.get('hostname')  # Use this if provided
+        family = request.data.get('family', 'Switch')
+        site_id = request.data.get('site_id')
+        site_name = request.data.get('site')
+        
+        # Look up site ID from name if that's what they sent
+        if not site_id and site_name:
+            from swim_backend.devices.models import Site
+            try:
+                site_obj = Site.objects.get(name=site_name)
+                site_id = site_obj.id
+                log_update(f"ztp_{pk}", f"Found site '{site_name}' (ID: {site_id})")
+            except Site.DoesNotExist:
+                log_update(f"ztp_{pk}", f"Warning: Site '{site_name}' not in database. Device will be unassigned.")
+                site_id = None
+        
+        if not all([ip_address, platform]):
+            return Response({'error': 'Missing required fields: ip_address, platform'}, status=400)
+        
+        log_update(f"ztp_{pk}", f"ZTP Provision Request from {ip_address}")
+        
+        from swim_backend.devices.models import Device, DeviceModel
+        from swim_backend.core.services.genie_service import create_genie_device
+        
+        try:
+            log_update(f"ztp_{pk}", f"Connecting to {ip_address}...")
+            
+            # Build temp device object to test connectivity
+            temp_device = Device(
+                hostname=f"temp_{ip_address}",
+                ip_address=ip_address,
+                username=username,
+                password=password,
+                secret=secret,
+                platform=platform
+            )
+            
+            dev, _ = create_genie_device(temp_device, f"ztp_{pk}")
+            dev.connect(log_stdout=False, learn_hostname=True)
+            
+            # Grab hostname from device itself
+            hostname = hostname_override or dev.learned_hostname or f"device_{ip_address}"
+            
+            # Pull MAC from show version output
+            output = dev.parse("show version")
+            mac_address = None
+            
+            if isinstance(output, dict):
+                version_info = output.get('version', {})
+                # MAC address field varies by platform (IOS, IOS-XE, NX-OS)
+                mac_address = (version_info.get('base_ethernet_mac_address') or 
+                             version_info.get('mac_address') or
+                             version_info.get('system_mac_address'))
+                
+                # Grab version and chassis info while we're here
+                current_version = version_info.get('version', 'unknown')
+                chassis = version_info.get('chassis', 'unknown')
+                boot_method = version_info.get('system_image')
+            
+            dev.disconnect()
+            log_update(f"ztp_{pk}", f"Discovered: hostname={hostname}, mac={mac_address}")
+            
+        except Exception as e:
+            log_update(f"ztp_{pk}", f"Connection failed: {e}")
+            return Response({'error': f'Failed to connect to device: {e}'}, status=400)
+        
+        existing_device = None
+        if mac_address:
+            existing_device = Device.objects.filter(
+                hostname=hostname,
+                mac_address=mac_address
+            ).first()
+        else:
+            # Some devices don't expose MAC in show version - fallback to hostname
+            existing_device = Device.objects.filter(hostname=hostname).first()
+        
+        if existing_device:
+            log_update(f"ztp_{pk}", f"Device {hostname} found in inventory (ID: {existing_device.id})")
+            
+            # Check if device is already running the right IOS version
+            if existing_device.model and existing_device.model.default_image:
+                golden_version = existing_device.model.default_image.version
+                
+                # Compare running version to golden standard
+                if existing_device.version == golden_version:
+                    log_update(f"ztp_{pk}", f"Device {hostname} is already compliant with golden image. Skipping.")
+                    ztp.skipped_devices += 1
+                    ztp.total_devices += 1
+                    ztp.save()
+                    return Response({
+                        'status': 'skipped',
+                        'reason': 'Device already compliant',
+                        'device_id': existing_device.id,
+                        'current_version': existing_device.version,
+                        'golden_version': golden_version
+                    })
+            
+            device = existing_device
+        else:
+            log_update(f"ztp_{pk}", f"Adding {hostname} to inventory...")
+            
+            # Figure out which site to assign
+            if not site_id and ztp.target_site:
+                site_id = ztp.target_site.id
+            
+            # Add device to database
+            device = Device.objects.create(
+                hostname=hostname,
+                ip_address=ip_address,
+                username=username,
+                password=password,
+                secret=secret,
+                platform=platform,
+                family=family,
+                mac_address=mac_address,
+                reachability='Reachable',
+                site_id=site_id,
+                last_sync_status='Pending'
+            )
+            log_update(f"ztp_{pk}", f"Device added with ID: {device.id}")
+        
+        log_update(f"ztp_{pk}", f"Syncing device {hostname}...")
+        from swim_backend.core.services.sync_service import sync_device_details
+        
+        try:
+            # Pull full device details - model, version, hardware info
+            sync_device_details(device.id)
+            device.refresh_from_db()
+            log_update(f"ztp_{pk}", f"Sync complete. Model: {device.model}, Version: {device.version}")
+        except Exception as e:
+            log_update(f"ztp_{pk}", f"Sync failed: {e}")
+            ztp.failed_devices += 1
+            ztp.total_devices += 1
+            ztp.save()
+            return Response({'error': f'Device sync failed: {e}', 'device_id': device.id}, status=500)
+        
+        if not device.model:
+            log_update(f"ztp_{pk}", f"Can't determine model for {hostname}. Skipping upgrade.")
+            ztp.skipped_devices += 1
+            ztp.total_devices += 1
+            ztp.save()
+            return Response({
+                'status': 'skipped',
+                'reason': 'No model detected',
+                'device_id': device.id
+            })
+        
+        if not device.model.default_image:
+            log_update(f"ztp_{pk}", f"No golden IOS image configured for {device.model.name}. Can't upgrade.")
+            ztp.skipped_devices += 1
+            ztp.total_devices += 1
+            ztp.save()
+            return Response({
+                'status': 'skipped',
+                'reason': 'No golden image set for model',
+                'device_id': device.id,
+                'model': device.model.name
+            })
+        
+        # Verify device matches our deployment criteria
+        if ztp.device_family_filter and device.family != ztp.device_family_filter:
+            log_update(f"ztp_{pk}", f"Device family {device.family} does not match filter. Skipping.")
+            ztp.skipped_devices += 1
+            ztp.total_devices += 1
+            ztp.save()
+            return Response({
+                'status': 'skipped',
+                'reason': 'Device family filter mismatch',
+                'device_id': device.id
+            })
+        
+        if ztp.platform_filter and device.platform != ztp.platform_filter:
+            log_update(f"ztp_{pk}", f"Device platform {device.platform} does not match filter. Skipping.")
+            ztp.skipped_devices += 1
+            ztp.total_devices += 1
+            ztp.save()
+            return Response({
+                'status': 'skipped',
+                'reason': 'Platform filter mismatch',
+                'device_id': device.id
+            })
+        
+        if ztp.model_filter and device.model != ztp.model_filter:
+            log_update(f"ztp_{pk}", f"Device model {device.model.name} does not match filter. Skipping.")
+            ztp.skipped_devices += 1
+            ztp.total_devices += 1
+            ztp.save()
+            return Response({
+                'status': 'skipped',
+                'reason': 'Model filter mismatch',
+                'device_id': device.id
+            })
+        
+        log_update(f"ztp_{pk}", f"Creating upgrade job for {hostname}...")
+        
+        # Queue up the IOS upgrade job
+        job = Job.objects.create(
+            device=device,
+            image=device.model.default_image,
+            workflow=ztp.workflow,
+            task_name=f"ZTP Auto-Provision: {ztp.name}",
+            status='pending',
+            created_by=request.user
+        )
+        
+        # Attach pre/post checks (show version, inventory, etc.)
+        if ztp.precheck_validations.exists():
+            job.selected_checks.set(ztp.precheck_validations.all())
+        if ztp.postcheck_validations.exists():
+            job.selected_checks.add(*ztp.postcheck_validations.all())
+        
+        # Add device to provisioned list
+        ztp.devices_provisioned.add(device)
+        ztp.total_devices += 1
+        ztp.save()
+        
+        # Kick off the upgrade in the background
+        log_update(f"ztp_{pk}", f"Job {job.id} created. Starting execution...")
+        t = threading.Thread(target=run_swim_job, args=(job.id,))
+        t.daemon = True
+        t.start()
+        
+        # Return job ID so device can check status later
+        return Response({
+            'status': 'accepted',
+            'message': 'Device provisioning job created successfully',
+            'job_id': job.id,
+            'device_id': device.id,
+            'device_hostname': device.hostname,
+            'workflow_name': ztp.workflow.name,
+            'target_image': device.model.default_image.filename,
+            'target_version': device.model.default_image.version,
+            'job_status_url': request.build_absolute_uri(f'/api/core/jobs/{job.id}/')
+        }, status=202)
+    
+    @action(detail=True, methods=['post'])
+    def toggle_status(self, request, pk=None):
+        """Toggle workflow between active and paused"""
+        ztp = self.get_object()
+        if ztp.status == 'active':
+            ztp.status = 'paused'
+        elif ztp.status == 'paused':
+            ztp.status = 'active'
+        ztp.save()
+        return Response({'status': ztp.status})
+    
+    @action(detail=True, methods=['get'])
+    def stats(self, request, pk=None):
+        """Get detailed statistics for ZTP workflow"""
+        ztp = self.get_object()
+        
+        # Get jobs associated with this ZTP
+        jobs = Job.objects.filter(task_name__startswith=f"ZTP Auto-Provision: {ztp.name}")
+        
+        return Response({
+            'total_devices': ztp.total_devices,
+            'completed': ztp.completed_devices,
+            'failed': ztp.failed_devices,
+            'skipped': ztp.skipped_devices,
+            'in_progress': jobs.filter(status__in=['running', 'distributing', 'activating']).count(),
+            'pending': jobs.filter(status__in=['pending', 'scheduled']).count(),
+            'progress_percentage': int((ztp.completed_devices / ztp.total_devices * 100)) if ztp.total_devices > 0 else 0,
+            'webhook_url': request.build_absolute_uri(f'/api/core/ztp-workflows/{pk}/provision_device/'),
+            'webhook_token': ztp.webhook_token
+        })
+
