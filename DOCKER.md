@@ -59,7 +59,7 @@ Required variables in `.env`:
 # Security
 SECRET_KEY=your-secret-key-here
 DEBUG=False
-ALLOWED_HOSTS=yourdomain.com,www.yourdomain.com
+ALLOWED_HOSTS=*
 
 # Database (Production)
 DB_USER=swimuser

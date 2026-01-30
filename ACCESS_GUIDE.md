@@ -298,7 +298,7 @@ curl http://localhost/api/schema/
 
 **Solution**: Check ALLOWED_HOSTS in .env:
 ```bash
-ALLOWED_HOSTS=localhost,127.0.0.1,yourdomain.com
+ALLOWED_HOSTS=*
 ```
 
 ### Can't login to Django admin
@@ -327,7 +327,8 @@ ports:
 ### Custom Domain
 Update .env:
 ```bash
-ALLOWED_HOSTS=swim.yourcompany.com
+ALLOWED_HOSTS=*
+# Or specific domain: ALLOWED_HOSTS=swim.yourcompany.com
 ```
 
 Access at:

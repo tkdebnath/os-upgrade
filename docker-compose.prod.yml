@@ -55,7 +55,7 @@ services:
     environment:
       - DJANGO_SETTINGS_MODULE=swim_backend.settings
       - DEBUG=False
-      - ALLOWED_HOSTS=${ALLOWED_HOSTS:-localhost}
+      - ALLOWED_HOSTS=${ALLOWED_HOSTS:-*}
       - SECRET_KEY=${SECRET_KEY}
       - DATABASE_URL=postgresql://${DB_USER:-swimuser}:${DB_PASSWORD:-changeme}@db:5432/swimdb
       - REDIS_URL=redis://redis:6379/0

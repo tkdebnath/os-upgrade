@@ -1,4 +1,101 @@
 from pathlib import Path
+import os
+
+# LDAP Configuration
+LDAP_ENABLED = os.getenv('LDAP_SERVER_URI', '').strip() != ''
+
+if LDAP_ENABLED:
+    import ldap
+    from django_auth_ldap.config import LDAPSearch, ActiveDirectoryGroupType, GroupOfNamesType
+    
+    # LDAP Server
+    AUTH_LDAP_SERVER_URI = os.getenv('LDAP_SERVER_URI')
+    AUTH_LDAP_BIND_DN = os.getenv('LDAP_BIND_DN', '')
+    AUTH_LDAP_BIND_PASSWORD = os.getenv('LDAP_BIND_PASSWORD', '')
+    
+    # User Search
+    user_search_base = os.getenv('LDAP_USER_SEARCH_BASE', 'ou=users,dc=example,dc=com')
+    user_search_filter = os.getenv('LDAP_USER_SEARCH_FILTER', '(uid=%(user)s)')
+    AUTH_LDAP_USER_SEARCH = LDAPSearch(
+        user_search_base,
+        ldap.SCOPE_SUBTREE,
+        user_search_filter
+    )
+    
+    # Group Search (if configured)
+    group_search_base = os.getenv('LDAP_GROUP_SEARCH_BASE', '')
+    if group_search_base:
+        AUTH_LDAP_GROUP_SEARCH = LDAPSearch(
+            group_search_base,
+            ldap.SCOPE_SUBTREE,
+            "(objectClass=*)"
+        )
+        
+        # Group Type
+        group_type = os.getenv('LDAP_GROUP_TYPE', 'GroupOfNamesType')
+        if group_type == 'ActiveDirectoryGroupType':
+            AUTH_LDAP_GROUP_TYPE = ActiveDirectoryGroupType()
+        else:
+            AUTH_LDAP_GROUP_TYPE = GroupOfNamesType()
+        
+        # Mirror LDAP groups to Django
+        AUTH_LDAP_MIRROR_GROUPS = os.getenv('LDAP_MIRROR_GROUPS', 'False').lower() == 'true'
+    
+    # User Attribute Mapping
+    AUTH_LDAP_USER_ATTR_MAP = {
+        "first_name": os.getenv('LDAP_ATTR_FIRST_NAME', 'givenName'),
+        "last_name": os.getenv('LDAP_ATTR_LAST_NAME', 'sn'),
+        "email": os.getenv('LDAP_ATTR_EMAIL', 'mail'),
+    }
+    
+    # User Flags by Group (is_staff, is_superuser, is_active)
+    AUTH_LDAP_USER_FLAGS_BY_GROUP = {}
+    
+    if os.getenv('LDAP_GROUP_STAFF'):
+        AUTH_LDAP_USER_FLAGS_BY_GROUP['is_staff'] = os.getenv('LDAP_GROUP_STAFF')
+    
+    if os.getenv('LDAP_GROUP_SUPERUSER'):
+        AUTH_LDAP_USER_FLAGS_BY_GROUP['is_superuser'] = os.getenv('LDAP_GROUP_SUPERUSER')
+    
+    if os.getenv('LDAP_GROUP_ACTIVE'):
+        AUTH_LDAP_USER_FLAGS_BY_GROUP['is_active'] = os.getenv('LDAP_GROUP_ACTIVE')
+    
+    # Require group membership for access
+    if os.getenv('LDAP_REQUIRE_GROUP'):
+        AUTH_LDAP_REQUIRE_GROUP = os.getenv('LDAP_REQUIRE_GROUP')
+    
+    # Connection options
+    AUTH_LDAP_CONNECTION_OPTIONS = {
+        ldap.OPT_REFERRALS: 0,
+    }
+    
+    if os.getenv('LDAP_DEBUG', 'False').lower() == 'true':
+        AUTH_LDAP_CONNECTION_OPTIONS[ldap.OPT_DEBUG_LEVEL] = 1
+    
+    # Start TLS
+    if os.getenv('LDAP_START_TLS', 'False').lower() == 'true':
+        AUTH_LDAP_START_TLS = True
+    
+    # Always update user on login
+    AUTH_LDAP_ALWAYS_UPDATE_USER = True
+    
+    # Auto-create users
+    if os.getenv('LDAP_AUTO_CREATE_USERS', 'True').lower() == 'true':
+        AUTH_LDAP_USER_FLAGS_BY_GROUP.setdefault('is_active', True)
+    
+    # Cache settings
+    AUTH_LDAP_CACHE_TIMEOUT = 3600  # 1 hour
+    
+    # Authentication backends - LDAP first, then Django database
+    AUTHENTICATION_BACKENDS = [
+        'django_auth_ldap.backend.LDAPBackend',
+        'django.contrib.auth.backends.ModelBackend',
+    ]
+else:
+    # No LDAP - use Django database authentication only
+    AUTHENTICATION_BACKENDS = [
+        'django.contrib.auth.backends.ModelBackend',
+    ]
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent

@@ -14,7 +14,7 @@ services:
     environment:
       - DJANGO_SETTINGS_MODULE=swim_backend.settings
       - DEBUG=${DEBUG:-False}
-      - ALLOWED_HOSTS=${ALLOWED_HOSTS:-localhost,127.0.0.1,backend}
+      - ALLOWED_HOSTS=${ALLOWED_HOSTS:-*}
       - SECRET_KEY=${SECRET_KEY:-change-this-in-production}
       - DATABASE_URL=${DATABASE_URL:-sqlite:///db.sqlite3}
       # LDAP settings (optional - configure in .env.ldap)
