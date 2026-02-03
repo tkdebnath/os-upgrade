@@ -206,6 +206,12 @@ class ZTPWorkflow(models.Model):
         ordering = ['-created_at']
         verbose_name = 'ZTP Workflow'
         verbose_name_plural = 'ZTP Workflows'
+        permissions = [
+            ('can_view_ztp', 'Can view ZTP workflows'),
+            ('can_manage_ztp', 'Can create/edit ZTP workflows'),
+            ('can_execute_ztp', 'Can execute ZTP provisioning'),
+            ('can_delete_ztp', 'Can delete ZTP workflows'),
+        ]
     
     def __str__(self):
         return f"{self.name} - {self.status}"

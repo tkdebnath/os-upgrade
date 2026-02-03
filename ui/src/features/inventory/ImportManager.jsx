@@ -90,7 +90,6 @@ const ImportManager = ({ onImportSuccess }) => {
                         {/* Content */}
                         <div className="p-6">
 
-                            {/* Step 1: Selection */}
                             {step === 'select' && (
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     {/* CSV Option */}

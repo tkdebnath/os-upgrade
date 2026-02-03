@@ -7,7 +7,6 @@ import json
 
 
 def get_client_ip(request):
-    """Extract client IP from request"""
     x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
     if x_forwarded_for:
         ip = x_forwarded_for.split(',')[0]
@@ -17,16 +16,6 @@ def get_client_ip(request):
 
 
 def log_activity(user, action, obj=None, changes=None, request=None):
-    """
-    Log user activity
-    
-    Args:
-        user: User instance
-        action: 'create', 'update', 'delete', 'login', 'logout', 'view'
-        obj: The object being acted upon (optional)
-        changes: Dictionary of field changes for updates (optional)
-        request: HTTP request object (optional)
-    """
     if not user or not user.is_authenticated:
         return
     

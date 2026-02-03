@@ -72,10 +72,10 @@ class _NetBoxClient:
         else:
             # Fallback / v1 / Auto-detect logic
             # Handle various input formats:
-            # 1. "Token <key>" -> Token <key>
-            # 2. "Bearer <key>" -> Bearer <key>
-            # 3. "nbt_..." -> Bearer nbt_... (Netbox v2/v3 new style)
-            # 4. "<hex>" -> Token <hex> (Old style)
+            # "Token <key>" -> Token <key>
+            # "Bearer <key>" -> Bearer <key>
+            # "nbt_..." -> Bearer nbt_... (Netbox v2/v3 new style)
+            # "<hex>" -> Token <hex> (Old style)
             
             # Strip existing prefixes
             cleaned_token = re.sub(r'(?i)^(token|bearer)\s+', '', token).strip()

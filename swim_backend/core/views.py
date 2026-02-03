@@ -1,13 +1,54 @@
 from rest_framework import serializers, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, BasePermission, SAFE_METHODS
 from .models import Job, GoldenImage, ValidationCheck, CheckRun, Workflow, WorkflowStep, ZTPWorkflow
+from swim_backend.devices.models import Device, Site, DeviceModel
 from .logic import run_swim_job, log_update
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter
 import threading
 import os
+
+
+class ZTPPermission(BasePermission):
+    """
+    Custom permission for Zero Touch Provisioning.
+    Requires explicit ZTP permissions - staff/superuser status alone is not sufficient.
+    """
+    def has_permission(self, request, view):
+        # Must be authenticated
+        if not request.user or not request.user.is_authenticated:
+            return False
+        
+        # Superusers always have access
+        if request.user.is_superuser:
+            return True
+        
+        # Check specific ZTP permissions based on action
+        if request.method in SAFE_METHODS:  # GET, HEAD, OPTIONS
+            # Require explicit view permission
+            return request.user.has_perm('core.can_view_ztp')
+        elif request.method == 'POST':
+            if view.action == 'provision_device':
+                # Execute permission for webhook/provisioning
+                return request.user.has_perm('core.can_execute_ztp')
+            else:
+                # Manage permission for creating workflows
+                return request.user.has_perm('core.can_manage_ztp')
+        elif request.method in ['PUT', 'PATCH']:
+            # Manage permission for editing
+            return request.user.has_perm('core.can_manage_ztp')
+        elif request.method == 'DELETE':
+            # Delete permission required
+            return request.user.has_perm('core.can_delete_ztp')
+        
+        return False
+    
+    def has_object_permission(self, request, view, obj):
+        # Same logic as has_permission
+        return self.has_permission(request, view)
+
 
 class GoldenImageSerializer(serializers.ModelSerializer):
     class Meta:
@@ -88,6 +129,15 @@ class WorkflowSerializer(serializers.ModelSerializer):
         model = Workflow
         fields = '__all__'
 
+
+class UpdateStepsSerializer(serializers.Serializer):
+    """Serializer for workflow update_steps action"""
+    name = serializers.CharField(help_text="Step name")
+    step_type = serializers.CharField(help_text="Step type (readiness, upgrade, validation, etc.)")
+    order = serializers.IntegerField(help_text="Step execution order")
+    config = serializers.JSONField(required=False, default=dict, help_text="Step configuration")
+
+
 class WorkflowViewSet(viewsets.ModelViewSet):
     queryset = Workflow.objects.all()
     serializer_class = WorkflowSerializer
@@ -111,11 +161,10 @@ class WorkflowViewSet(viewsets.ModelViewSet):
         workflow.save()
         return Response({"status": "default_set", "workflow": workflow.name})
 
-    @action(detail=True, methods=['post'])
+    @action(detail=True, methods=['post'], serializer_class=UpdateStepsSerializer)
     def update_steps(self, request, pk=None):
         """
         Full replace of steps for a workflow.
-        Body: [{ "name": "Step 1", "type": "readiness", "order": 1, "config": {} }, ...]
         """
         workflow = self.get_object()
         steps_data = request.data
@@ -171,12 +220,44 @@ class JobSerializer(serializers.ModelSerializer):
         model = Job
         fields = '__all__'
 
+
+class BulkCreateJobSerializer(serializers.Serializer):
+    """Serializer for bulk job creation"""
+    devices = serializers.ListField(
+        child=serializers.IntegerField(),
+        help_text="List of device IDs to upgrade"
+    )
+    execution_mode = serializers.ChoiceField(
+        choices=['parallel', 'sequential'],
+        default='parallel',
+        help_text="Execution mode: parallel or sequential"
+    )
+    image = serializers.IntegerField(required=False, allow_null=True, help_text="Golden image ID")
+    selected_checks = serializers.ListField(
+        child=serializers.IntegerField(),
+        required=False,
+        default=list,
+        help_text="List of validation check IDs"
+    )
+    distribution_time = serializers.DateTimeField(required=False, allow_null=True, help_text="Schedule distribution time")
+    activation_time = serializers.DateTimeField(required=False, allow_null=True, help_text="Schedule activation time")
+    activate_after_distribute = serializers.BooleanField(default=True, help_text="Auto-activate after distribution")
+    cleanup_flash = serializers.BooleanField(default=False, help_text="Clean up flash after upgrade")
+    task_name = serializers.CharField(default='Distribution-Task', help_text="Task name")
+
+
+class BulkRescheduleSerializer(serializers.Serializer):
+    """Serializer for bulk job rescheduling"""
+    ids = serializers.ListField(
+        child=serializers.IntegerField(),
+        help_text="List of job IDs to reschedule"
+    )
+    distribution_time = serializers.DateTimeField(help_text="New distribution time")
+
+
 class JobViewSet(viewsets.ModelViewSet):
     queryset = Job.objects.all().order_by('-created_at')
     serializer_class = JobSerializer
-    filter_backends = [DjangoFilterBackend, SearchFilter]
-    filterset_fields = ['status', 'device', 'task_name']
-    search_fields = ['device__hostname', 'device__ip_address', 'status', 'task_name']
     
     def perform_create(self, serializer):
         job = serializer.save()
@@ -296,16 +377,10 @@ class JobViewSet(viewsets.ModelViewSet):
         response['Content-Disposition'] = f'attachment; filename="{filename}"'
         return response
 
-    @action(detail=False, methods=['post'])
+    @action(detail=False, methods=['post'], serializer_class=BulkCreateJobSerializer)
     def bulk_create(self, request):
         """
         Batch upgrade multiple devices - run all at once or one-by-one.
-        Body: {
-            "devices": [1, 2],
-            "execution_mode": "parallel" | "sequential",
-            "selected_checks": [1, 3],
-            ... other job params
-        }
         """
         device_ids = request.data.get('devices', [])
         execution_mode = request.data.get('execution_mode', 'parallel')
@@ -423,11 +498,10 @@ class JobViewSet(viewsets.ModelViewSet):
         job.save()
         return Response({"status": "cancelled", "message": "Job cancellation requested."})
 
-    @action(detail=False, methods=['post'])
+    @action(detail=False, methods=['post'], serializer_class=BulkRescheduleSerializer)
     def bulk_reschedule(self, request):
         """
         Reschedules multiple jobs to a new time.
-        Body: { "ids": [1, 2], "distribution_time": "2023-10-27T10:00:00Z" }
         """
         job_ids = request.data.get('ids', [])
         new_time = request.data.get('distribution_time')
@@ -462,6 +536,38 @@ class CheckRunSerializer(serializers.ModelSerializer):
         model = CheckRun
         fields = '__all__'
 
+class RunReadinessSerializer(serializers.Serializer):
+    """Serializer for running readiness checks"""
+    scope = serializers.ChoiceField(
+        choices=['all', 'site', 'selection'],
+        default='selection',
+        help_text="Scope: all devices, by site, or specific selection"
+    )
+    ids = serializers.ListField(
+        child=serializers.IntegerField(),
+        required=False,
+        default=list,
+        help_text="Device IDs (required for 'selection' scope)"
+    )
+    site = serializers.IntegerField(
+        required=False,
+        allow_null=True,
+        help_text="Site ID (required for 'site' scope)"
+    )
+
+
+class RunChecksSerializer(serializers.Serializer):
+    """Serializer for running validation checks"""
+    devices = serializers.ListField(
+        child=serializers.IntegerField(),
+        help_text="List of device IDs"
+    )
+    checks = serializers.ListField(
+        child=serializers.IntegerField(),
+        help_text="List of validation check IDs"
+    )
+
+
 class CheckRunViewSet(viewsets.ModelViewSet):
     """
     API for managing standalone check executions.
@@ -469,11 +575,10 @@ class CheckRunViewSet(viewsets.ModelViewSet):
     queryset = CheckRun.objects.all().order_by('-created_at')
     serializer_class = CheckRunSerializer
     
-    @action(detail=False, methods=['post'])
+    @action(detail=False, methods=['post'], serializer_class=RunReadinessSerializer)
     def run_readiness(self, request):
         """
         Run pre-upgrade readiness checks (flash space, boot config, etc.).
-        Scope: 'all', 'site', 'selection'.
         """
         from swim_backend.devices.models import Device
         from .logic import run_swim_job
@@ -514,11 +619,10 @@ class CheckRunViewSet(viewsets.ModelViewSet):
                 
         return Response({"status": "initiated", "devices": len(devices), "checks_per_device": len(checks)})
 
-    @action(detail=False, methods=['post'])
+    @action(detail=False, methods=['post'], serializer_class=RunChecksSerializer)
     def run(self, request):
         """
         Run validation commands on devices (show version, inventory, etc.).
-        Body: { "devices": [1, 2], "checks": [1, 5] }
         """
         device_ids = request.data.get('devices', [])
         check_ids = request.data.get('checks', [])
@@ -721,12 +825,26 @@ class DashboardViewSet(viewsets.ViewSet):
 # ============================================================================
 
 class ZTPWorkflowSerializer(serializers.ModelSerializer):
-    workflow_name = serializers.CharField(source='workflow.name', read_only=True)
-    target_site_name = serializers.CharField(source='target_site.name', read_only=True)
-    model_name = serializers.CharField(source='model_filter.name', read_only=True)
+    workflow = serializers.PrimaryKeyRelatedField(queryset=Workflow.objects.all(), required=False, allow_null=True)
+    workflow_name = serializers.SerializerMethodField()
+    target_site = serializers.PrimaryKeyRelatedField(queryset=Site.objects.all(), required=False, allow_null=True)
+    target_site_name = serializers.SerializerMethodField()
+    model_filter = serializers.PrimaryKeyRelatedField(queryset=DeviceModel.objects.all(), required=False, allow_null=True)
+    model_name = serializers.SerializerMethodField()
+    devices_provisioned = serializers.PrimaryKeyRelatedField(many=True, queryset=Device.objects.all(), required=False)
+    precheck_validations = serializers.PrimaryKeyRelatedField(many=True, queryset=ValidationCheck.objects.all(), required=False)
+    postcheck_validations = serializers.PrimaryKeyRelatedField(many=True, queryset=ValidationCheck.objects.all(), required=False)
     provisioned_device_count = serializers.SerializerMethodField()
     progress_percentage = serializers.SerializerMethodField()
-    webhook_token = serializers.CharField(write_only=True, required=False)
+    
+    def get_workflow_name(self, obj):
+        return obj.workflow.name if obj.workflow else None
+    
+    def get_target_site_name(self, obj):
+        return obj.target_site.name if obj.target_site else None
+    
+    def get_model_name(self, obj):
+        return obj.model_filter.name if obj.model_filter else None
     
     def get_provisioned_device_count(self, obj):
         return obj.devices_provisioned.count()
@@ -738,15 +856,36 @@ class ZTPWorkflowSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = ZTPWorkflow
-        fields = '__all__'
+        fields = [
+            'id', 'name', 'description', 'workflow', 'workflow_name',
+            'target_site', 'target_site_name', 'device_family_filter', 
+            'platform_filter', 'model_filter', 'model_name', 'status',
+            'devices_provisioned', 'precheck_validations', 'postcheck_validations',
+            'total_devices', 'completed_devices', 'failed_devices', 'skipped_devices',
+            'provisioned_device_count', 'progress_percentage', 'webhook_token',
+            'created_by', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['created_at', 'updated_at', 'created_by']
+
+
+class ZTPProvisionDeviceSerializer(serializers.Serializer):
+    """Serializer for ZTP provision device webhook payload"""
+    ip_address = serializers.IPAddressField(required=True, help_text="IP address of the device to provision")
+    platform = serializers.CharField(required=True, help_text="Device platform (iosxe, nxos, iosxr, etc.)")
+    username = serializers.CharField(required=False, allow_null=True, allow_blank=True, help_text="Device username (optional - defaults to global credentials)")
+    password = serializers.CharField(required=False, allow_null=True, allow_blank=True, help_text="Device password (optional)")
+    secret = serializers.CharField(required=False, allow_null=True, allow_blank=True, help_text="Enable password (optional)")
+    hostname = serializers.CharField(required=False, allow_null=True, allow_blank=True, help_text="Device hostname (optional - auto-discovered if not provided)")
+    family = serializers.CharField(required=False, allow_null=True, allow_blank=True, default='Switch', help_text="Device family: Switch/Router/AP/WLC (optional)")
+    site = serializers.CharField(required=False, allow_null=True, allow_blank=True, help_text="Site name (optional)")
+    site_id = serializers.IntegerField(required=False, allow_null=True, help_text="Site ID - preferred over site name (optional)")
 
 
 class ZTPWorkflowViewSet(viewsets.ModelViewSet):
     queryset = ZTPWorkflow.objects.all()
     serializer_class = ZTPWorkflowSerializer
-    filter_backends = [DjangoFilterBackend, SearchFilter]
-    filterset_fields = ['status', 'target_site', 'device_family_filter']
-    search_fields = ['name', 'description']
+    permission_classes = [ZTPPermission]
+    filter_backends = []  # Explicitly disable filters to prevent 'model' field error
     
     def perform_create(self, serializer):
         """Create ZTP workflow with current user"""
@@ -756,23 +895,11 @@ class ZTPWorkflowViewSet(viewsets.ModelViewSet):
         token = ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(40))
         serializer.save(created_by=self.request.user, webhook_token=token)
     
-    @action(detail=True, methods=['post'])
+    @action(detail=True, methods=['post'], serializer_class=ZTPProvisionDeviceSerializer)
     def provision_device(self, request, pk=None):
         """
         ZTP webhook endpoint - device boots up and calls this to get auto-upgraded.
         Returns job_id right away so device doesn't have to wait.
-        
-        Payload: {
-            "ip_address": "10.1.1.10",  # required
-            "platform": "iosxe",  # required - iosxe, nxos, etc.
-            "username": "admin",  # optional - defaults to global creds
-            "password": "cisco",  # optional
-            "secret": "cisco",  # optional - enable password
-            "hostname": "switch-01",  # optional - auto-discovered from device
-            "family": "Switch",  # optional - Switch/Router/AP/WLC
-            "site": "Main Campus",  # optional - site name
-            "site_id": 1  # optional - site ID (preferred over name)
-        }
         """
         ztp = self.get_object()
         

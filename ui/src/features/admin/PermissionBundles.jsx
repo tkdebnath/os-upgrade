@@ -45,7 +45,7 @@ const PermissionBundles = () => {
     };
 
     // Configure axios defaults
-    axios.defaults.baseURL = 'http://localhost:8000';
+    axios.defaults.baseURL = window.location.origin;
     axios.defaults.withCredentials = true;
     axios.defaults.headers.common['X-CSRFToken'] = getCsrfToken();
 
@@ -403,13 +403,13 @@ const PermissionBundles = () => {
                                             <label key={action.codename} className="flex items-start gap-2 p-2 border bg-white rounded hover:bg-gray-50 cursor-pointer">
                                                 <input
                                                     type="checkbox"
-                                                    checked={bundleForm.additional_actions.includes(action.action)}
+                                                    checked={bundleForm.additional_actions.includes(action.codename)}
                                                     onChange={(e) => {
                                                         const actions = bundleForm.additional_actions.split(',').map(a => a.trim()).filter(a => a);
                                                         if (e.target.checked) {
-                                                            actions.push(action.action);
+                                                            actions.push(action.codename);
                                                         } else {
-                                                            const index = actions.indexOf(action.action);
+                                                            const index = actions.indexOf(action.codename);
                                                             if (index > -1) actions.splice(index, 1);
                                                         }
                                                         setBundleForm({ ...bundleForm, additional_actions: actions.join(', ') });

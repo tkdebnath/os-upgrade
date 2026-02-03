@@ -14,3 +14,14 @@ logs/
 
 # Database
 db.sqlite3
+
+# SSL Certificates
+ssl/
+*.pem
+*.key
+*.crt
+*.csr
+# Environment configuration files
+env/app.env
+env/app.prod.env
+env/ldap.env

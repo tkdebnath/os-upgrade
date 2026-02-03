@@ -6,18 +6,11 @@ from swim_backend.core.services.diff_service import log_update
 logger = logging.getLogger(__name__)
 
 def check_readiness(device, job):
-    """
-    Pre-upgrade checks before touching the device:
-    1. Flash space (need 2.5x the IOS image size)
-    2. Config register (should be 0x2102)
-    3. SSH connectivity
-    """
     logger.info(f"Running readiness checks for {device.hostname}")
     log_update(job.id, f"Initiating readiness checks for {device.hostname}...")
     
     checks = {}
     
-    # 1. Connect to Device
     dev = None
     try:
         log_update(job.id, f"Connecting to {device.ip_address} via SSH...")
@@ -34,8 +27,7 @@ def check_readiness(device, job):
         return False, checks
 
     try:
-        # 2. Flash Memory Check
-        # Need 2.5x image size (room for extraction + old file)
+        # Check flash space
         log_update(job.id, "Checking Flash Memory space...")
         image_size = job.image.size_bytes if job.image else 0
         required_space = image_size * 2.5
@@ -72,7 +64,7 @@ def check_readiness(device, job):
              }
              log_update(job.id, "Flash Check Warning: Could not parse output.")
 
-        # 3. Config Register Check
+        # Config Register Check
         # Should be 0x2102 for standard boot
         # log_update(job.id, "Checking Configuration Register...")
         # try:
@@ -99,7 +91,7 @@ def check_readiness(device, job):
         #          "message": f"Invalid Register: {curr_reg} (Expected 0x2102)"
         #      }
 
-        # 4. Startup ignore Check
+        # Startup ignore Check
         log_update(job.id, "Checking Startup Configuration...")
         try:
             cmd_startup = "show romvar"

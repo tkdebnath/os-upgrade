@@ -82,11 +82,11 @@ def orchestrate_jobs(sequential_ids, parallel_ids, schedule_time=None):
     3. Runs parallel_ids concurrently.
     """
     
-    # 1. Update status to 'scheduled' initially
+    # Update status to 'scheduled' initially
     all_ids = sequential_ids + parallel_ids
     Job.objects.filter(id__in=all_ids).update(status='scheduled')
     
-    # 2. Wait for schedule
+    # Wait for schedule
     if schedule_time:
         try:
             # Parse if string
@@ -112,13 +112,13 @@ def orchestrate_jobs(sequential_ids, parallel_ids, schedule_time=None):
             for jid in all_ids:
                 log_update(jid, f"Scheduling Failed: {e}. Executing Now.")
 
-    # 3. Sequential Phase (Thread)
+    # Sequential Phase (Thread)
     if sequential_ids:
         t_seq = threading.Thread(target=run_sequential_batch, args=(sequential_ids,))
         t_seq.daemon = True
         t_seq.start()
 
-    # 4. Parallel Phase (Thread)
+    # Parallel Phase (Thread)
     if parallel_ids:
         # Launch each parallel job in its own thread
         for job_id in parallel_ids:

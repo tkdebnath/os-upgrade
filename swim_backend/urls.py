@@ -12,6 +12,7 @@ from rest_framework.schemas import get_schema_view
 from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, SpectacularSwaggerView
 
 from swim_backend.core.parity_views import SwimParityView
+from swim_backend.core import upgrade_pipeline
 
 # Parity View Instances for routing
 swim_view = SwimParityView()
@@ -24,6 +25,11 @@ urlpatterns = [
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
     path('api/schema/swagger-ui/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
     path('api/schema/redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),
+    
+    # --- Upgrade Pipeline API (Simplified) ---
+    path('api/upgrade/trigger/', upgrade_pipeline.trigger_upgrade_pipeline, name='trigger-upgrade'),
+    path('api/upgrade/status/', upgrade_pipeline.get_upgrade_status, name='upgrade-status'),
+    path('api/upgrade/cancel/', upgrade_pipeline.cancel_upgrade, name='cancel-upgrade'),
     
     # --- SWIM API Parity (Cisco DNA Center Style) ---
     path('image/importation', swim_view.get_images),

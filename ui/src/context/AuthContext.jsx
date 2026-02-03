@@ -24,7 +24,7 @@ export const AuthProvider = ({ children }) => {
 
   const checkAuth = async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/auth/me/', {
+      const response = await fetch(`${window.location.origin}/api/auth/me/`, {
         credentials: 'include',
       });
       if (response.ok) {
@@ -46,7 +46,7 @@ export const AuthProvider = ({ children }) => {
 
   const logout = async () => {
     try {
-      await fetch('http://localhost:8000/api/auth/logout/', {
+      await fetch(`${window.location.origin}/api/auth/logout/`, {
         method: 'POST',
         headers: {
           'X-CSRFToken': getCsrfToken(),
@@ -59,12 +59,19 @@ export const AuthProvider = ({ children }) => {
     setUser(null);
   };
 
+  const can = (permission) => {
+    if (!user) return false;
+    if (user.is_superuser) return true;
+    if (!user.permissions) return false;
+    return user.permissions.includes(permission);
+  };
+
   useEffect(() => {
     checkAuth();
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, loading, checkAuth, logout }}>
+    <AuthContext.Provider value={{ user, loading, checkAuth, logout, can }}>
       {children}
     </AuthContext.Provider>
   );

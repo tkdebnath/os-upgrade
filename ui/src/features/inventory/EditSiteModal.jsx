@@ -3,14 +3,6 @@ import { X, Globe, Save, } from 'lucide-react';
 import axios from 'axios';
 
 const EditSiteModal = ({ siteName, onClose, onSuccess }) => {
-    // We need to fetch the Site Object by Name first, because our Route uses Name
-    // BUT, ideally we should have the Site ID. 
-    // If the previous page doesn't have ID, we need to find it.
-
-    // Proposal: 
-    // 1. Fetch site by name filtering? `/api/sites/?name=siteName` if FilterSet exists.
-    // 2. Or just GET `/api/sites/` and find it. sites list shouldn't be huge for now.
-
     const [siteObj, setSiteObj] = useState(null);
     const [loading, setLoading] = useState(true);
     const [preferredFileServer, setPreferredFileServer] = useState('');

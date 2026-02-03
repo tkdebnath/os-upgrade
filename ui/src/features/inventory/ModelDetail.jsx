@@ -69,18 +69,15 @@ const ModelDetail = () => {
     const handleAddImage = async (e) => {
         e.preventDefault();
         try {
-            // 1. Create Image
             const imgPayload = {
                 version: newImage.version,
                 filename: newImage.filename,
                 size_bytes: parseInt(newImage.size_bytes),
                 md5_checksum: newImage.md5_checksum,
-                // uploaded_at is auto
             };
             const imgRes = await axios.post('/api/images/images/', imgPayload);
             const imageId = imgRes.data.id;
 
-            // 2. Link to Model
             if (model) {
                 await axios.patch(`/api/dcim/device-models/${model.id}/`, {
                     supported_images: [...(model.supported_images || []), imageId]

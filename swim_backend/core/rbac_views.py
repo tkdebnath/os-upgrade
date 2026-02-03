@@ -83,6 +83,22 @@ class PermissionBundleSerializer(serializers.ModelSerializer):
         return instance
 
 
+class AssignPermissionsSerializer(serializers.Serializer):
+    """Serializer for assigning permissions to groups or users"""
+    group_ids = serializers.ListField(
+        child=serializers.IntegerField(),
+        required=False,
+        default=list,
+        help_text="List of group IDs to assign permissions to"
+    )
+    user_ids = serializers.ListField(
+        child=serializers.IntegerField(),
+        required=False,
+        default=list,
+        help_text="List of user IDs to assign permissions to"
+    )
+
+
 class PermissionBundleViewSet(viewsets.ModelViewSet):
     queryset = PermissionBundle.objects.all().order_by('name')
     serializer_class = PermissionBundleSerializer
@@ -106,43 +122,29 @@ class PermissionBundleViewSet(viewsets.ModelViewSet):
         # Get all permissions
         all_permissions = Permission.objects.all().select_related('content_type')
         
-        # Extract custom actions
-        custom_actions_set = set()
-        for perm in all_permissions:
-            # Codename format: action_modelname
-            parts = perm.codename.split('_', 1)
-            if len(parts) == 2:
-                action = parts[0]
-                if action not in standard_actions and not action.startswith('can_'):
-                    continue
-                # Extract the base action name
-                if perm.codename.startswith('can_'):
-                    # Custom permission like can_sync_device
-                    action_name = perm.codename.replace('can_', '').rsplit('_', 1)[0]
-                    custom_actions_set.add({
-                        'codename': perm.codename,
-                        'name': perm.name,
-                        'action': action_name,
-                        'content_type': perm.content_type.id,
-                        'content_type_name': str(perm.content_type)
-                    })
-        
-        # Convert set to list (need to handle dict in set differently)
+        # Extract custom actions (permissions that are not standard CRUD)
         custom_actions_list = []
         seen = set()
+        
         for perm in all_permissions:
-            if perm.codename.startswith('can_'):
-                action_name = perm.codename.replace('can_', '').rsplit('_', 1)[0]
-                key = f"{action_name}_{perm.content_type.id}"
-                if key not in seen:
-                    seen.add(key)
-                    custom_actions_list.append({
-                        'codename': perm.codename,
-                        'name': perm.name,
-                        'action': action_name,
-                        'content_type': perm.content_type.id,
-                        'content_type_name': str(perm.content_type)
-                    })
+            # Skip standard CRUD permissions
+            parts = perm.codename.split('_', 1)
+            if len(parts) >= 2:
+                action = parts[0]
+                # Include if it's a custom action (not standard CRUD)
+                if action not in standard_actions:
+                    key = f"{perm.codename}_{perm.content_type.id}"
+                    if key not in seen:
+                        seen.add(key)
+                        custom_actions_list.append({
+                            'codename': perm.codename,
+                            'name': perm.name,
+                            'action': action,
+                            'content_type': perm.content_type.id,
+                            'content_type_name': str(perm.content_type),
+                            'app_label': perm.content_type.app_label,
+                            'model': perm.content_type.model
+                        })
         
         return Response(custom_actions_list)
     

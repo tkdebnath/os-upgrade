@@ -5,7 +5,7 @@ class Command(BaseCommand):
     help = 'Seeds Genie learn modules and categorizes checks'
 
     def handle(self, *args, **options):
-        # 1. Seed Genie Learn Modules
+        # Seed Genie Learn Modules
         genie_modules = [
             'interface', 'lag', 'vlan', 'vrf', 'platform', 'arp', 'dot1x', 'ntp'
         ]
@@ -20,7 +20,7 @@ class Command(BaseCommand):
                 }
             )
             
-        # 2. Categorize existing non-genie checks as 'script'
+        # Categorize existing non-genie checks as 'script'
         # Default to 'script' category if not 'genie'
         # Explicit about the standard checks added previously
         

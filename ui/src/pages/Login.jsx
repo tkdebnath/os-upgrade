@@ -33,12 +33,12 @@ function Login() {
 
     try {
       // First, get CSRF token
-      await fetch('http://localhost:8000/api/auth/csrf/', {
+      await fetch(`${window.location.origin}/api/auth/csrf/`, {
         credentials: 'include',
       });
 
       // Then attempt login
-      const response = await fetch('http://localhost:8000/api/auth/login/', {
+      const response = await fetch(`${window.location.origin}/api/auth/login/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

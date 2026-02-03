@@ -11,16 +11,7 @@ DISTRIBUTION_SEMAPHORE = threading.Semaphore(40)
 
 
 class DeviceFileDownloader:
-    """Handle IOS file copies to Cisco devices with progress tracking and reconnects."""
-    
     def __init__(self, device_config, logger_callback=None):
-        """
-        Set up the file transfer handler.
-        
-        Args:
-            device_config: Connection info (IP, creds, etc.)
-            logger_callback: Function to log progress updates
-        """
         self.device_config = device_config
         self.device = None
         self.download_in_progress = False
@@ -28,14 +19,12 @@ class DeviceFileDownloader:
         self.logger = logger_callback
 
     def log(self, message):
-        """Log message using callback or print as fallback."""
         if self.logger:
             self.logger(message)
         else:
             print(message)
         
     def connect(self):
-        """SSH to device with auto-retry if connection drops."""
         max_retries = 3
         retry_count = 0
         
@@ -94,7 +83,6 @@ class DeviceFileDownloader:
     
     
     def is_connected(self):
-        """Check if device connection is alive."""
         try:
             if self.device and self.device.is_connected():
                 # Send a simple command to verify connection is truly alive
@@ -105,7 +93,6 @@ class DeviceFileDownloader:
         return False
 
     def get_file_size(self, filename, destination='flash:'):
-        """Get file size in bytes if it exists, else None."""
         try:
             # Command: dir flash:filename
             # Output example: "   33554432 Jan 01 2024 12:00:00 filename.bin"
@@ -144,7 +131,6 @@ class DeviceFileDownloader:
             return None
 
     def verify_file_md5(self, filename, expected_md5, destination='flash:'):
-        """Verify MD5 checksum of a file on the device."""
         try:
             self.log(f"Calculating MD5 for {filename}...")
             # Command: verify /md5 flash:filename
@@ -172,24 +158,11 @@ class DeviceFileDownloader:
 
     
     def reconnect(self):
-        """Reconnect to device if connection was lost."""
         self.log(f"[{self._timestamp()}] Connection lost. Attempting reconnect...")
         self.disconnect()
         return self.connect()
     
     def download_file(self, url, total_size_bytes=None, destination='flash:'):
-        """
-        Download file from URL to device with live output and file size monitoring.
-        
-        Args:
-            url: HTTP/HTTPS URL of the file to download
-            total_size_bytes: Expected file size in bytes (for percentage calculation)
-            destination: Destination on device (default: flash:)
-        
-        Returns:
-            bool: True if successful, False otherwise
-        """
-        # Extract filename from URL
         filename = url.split('/')[-1]
         self.filename = filename
         self.destination = destination
@@ -275,17 +248,6 @@ class DeviceFileDownloader:
             return False
 
     def verify_file_md5(self, filename, expected_md5, destination='flash:'):
-        """
-        Verify file integrity using MD5 checksum.
-        
-        Args:
-            filename: Name of file to verify
-            expected_md5: Expected MD5 hash string
-            destination: Storage location (default: flash:)
-            
-        Returns:
-            bool: True if verification succeeds
-        """
         if not expected_md5:
             self.log("Warning: No MD5 provided. Skipping verification.")
             return True
@@ -319,16 +281,6 @@ class DeviceFileDownloader:
             return False
 
     def get_file_size(self, filename, destination='flash:'):
-        """
-        Get size of file on device if it exists.
-        
-        Args:
-            filename: Name of file
-            destination: Storage location
-            
-        Returns:
-            int: File size in bytes, or None if file not found/error
-        """
         try:
             cmd = f"dir {destination}{filename}"
             output = self.device.execute(cmd)
@@ -343,9 +295,6 @@ class DeviceFileDownloader:
         return None
 
     def _monitor_progress(self):
-        """Monitor download progress with secondary connection."""
-        
-        # Create a secondary connection for monitoring
         monitor_device = None
         try:
             monitor_config = self.device_config.copy()
@@ -418,7 +367,7 @@ class DeviceFileDownloader:
                 pass
 
     def _verify_download_size(self, filename, destination, expected_size):
-        """Verify download by checking file size matches expected."""
+
         if not expected_size:
             return False
             
@@ -437,8 +386,6 @@ class DeviceFileDownloader:
         return False
     
     def _verify_download(self, output, filename, destination):
-        """Verify if download completed successfully."""
-        # Check for success patterns
         if 'bytes copied' in output.lower():
             match = re.search(r'(\d+)\s+bytes copied', output, re.IGNORECASE)
             if match:
@@ -449,7 +396,6 @@ class DeviceFileDownloader:
         return 'OK' in output or 'bytes copied' in output.lower()
     
     def _check_flash_for_file(self, filename, destination='flash:'):
-        """Check if file exists in flash."""
         try:
             result = self.device.execute(f'dir {destination}')
             if filename in result:
@@ -463,7 +409,6 @@ class DeviceFileDownloader:
         return False
     
     def _timestamp(self):
-        """Return current timestamp string."""
         return datetime.now().strftime("%H:%M:%S")
 
 
@@ -477,19 +422,19 @@ class DistributeStep(BaseStep):
         """
         from swim_backend.images.models import FileServer
         
-        # 1. Device Preferred
+        # Device Preferred
         if device.preferred_file_server:
             return device.preferred_file_server, "Device Preferred"
             
-        # 2. Site Preferred
+        # Site Preferred
         if device.site and device.site.preferred_file_server:
             return device.site.preferred_file_server, f"Site Preferred ({device.site.name})"
 
-        # 3. Region Preferred
+        # Region Preferred
         if device.site and device.site.region and device.site.region.preferred_file_server:
             return device.site.region.preferred_file_server, f"Region Preferred ({device.site.region.name})"
             
-        # 4. Global Default
+        # Global Default
         default_fs = FileServer.objects.filter(is_global_default=True).first()
         if default_fs:
             return default_fs, "Global Default"
@@ -539,7 +484,7 @@ class DistributeStep(BaseStep):
                 else:
                      self.log("No File Server resolved. Attempting local transfer or failing if remote required.")
 
-            # 1. Transfer Logic (Including Smart Download checks)
+            # Transfer Logic (Including Smart Download checks)
             try:
                 self.perform_transfer(job, target_fs)
             except Exception as e:
@@ -589,7 +534,7 @@ class DistributeStep(BaseStep):
         path_part = f"{base_path}/{filename}" if base_path else filename
         file_url = f"{proto}://{file_server.address}:{file_server.port}/{path_part}"
         
-        # 2. Prepare Device Config for Genie
+        # Prepare Device Config for Genie
         device = job.device
         
         # Resolving credentials (similar to genie_service)
@@ -616,15 +561,15 @@ class DistributeStep(BaseStep):
 
         self.log(f"Initiating transfer from {file_url}...")
         
-        # 3. Instantiate Downloader
+        # Instantiate Downloader
         downloader = DeviceFileDownloader(device_config, logger_callback=self.log)
         
         try:
-            # 4. Connect
+            # Connect
             if not downloader.connect():
                  raise Exception("Could not connect to device for transfer.")
             
-            # 5. Smart Download Check
+            # Smart Download Check
             # Check if file exists and matches size/md5
             expected_size = job.image.size_bytes if job.image else None
             expected_md5 = job.image.md5_checksum if job.image else None
@@ -657,7 +602,7 @@ class DistributeStep(BaseStep):
             if not should_download:
                 return # Success, skip download
 
-            # 6. Start Download
+            # Start Download
             success = downloader.download_file(
                 url=file_url,
                 total_size_bytes=expected_size,
@@ -667,7 +612,7 @@ class DistributeStep(BaseStep):
             if success:
                 self.log("Transfer Step Finished Successfully.")
 
-                # 7. Post-Download MD5 Verification
+                # Post-Download MD5 Verification
                 if expected_md5:
                     if downloader.verify_file_md5(filename, expected_md5, destination='flash:'):
                          self.log("Post-Download MD5 Verified.")

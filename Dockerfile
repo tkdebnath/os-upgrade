@@ -23,7 +23,6 @@ WORKDIR /app
 COPY pyproject.toml ./
 COPY swim_backend ./swim_backend
 COPY manage.py ./
-COPY main.py ./
 
 # Install Python dependencies
 RUN pip install --upgrade pip && \
@@ -31,21 +30,14 @@ RUN pip install --upgrade pip && \
     pip install gunicorn whitenoise
 
 # Create necessary directories
-RUN mkdir -p logs media static
-
-# Create non-root user for security
-RUN useradd -m -u 1000 swimuser && \
-    chown -R swimuser:swimuser /app
-
-# Switch to non-root user
-USER swimuser
+RUN mkdir -p logs media static && chmod 777 logs media static
 
 # Expose port
 EXPOSE 8000
 
-# Healthcheck
+# Healthcheck - just check if gunicorn is responding
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-    CMD python -c "import requests; requests.get('http://localhost:8000/api/core/dashboard/stats/', timeout=5)"
+    CMD python -c "import requests; requests.get('http://localhost:8000/', timeout=5)" || exit 1
 
 # Collect static files and run migrations on startup
 CMD python manage.py collectstatic --noinput && \

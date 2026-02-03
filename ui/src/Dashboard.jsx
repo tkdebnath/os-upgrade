@@ -13,7 +13,6 @@ const Dashboard = () => {
     const [devices, setDevices] = useState([]);
     const [jobs, setJobs] = useState([]);
     const [stats, setStats] = useState({ analytics: null, ztp: null });
-    const [loading, setLoading] = useState(true);
     const [ztpWorkflows, setZtpWorkflows] = useState([]);
 
     const initialJobStats = [
@@ -22,18 +21,6 @@ const Dashboard = () => {
         { name: 'Running', value: 0, fill: '#3B82F6' },
     ];
     const [jobStats, setJobStats] = useState(initialJobStats);
-
-    useEffect(() => {
-        // Redirect to profile if user has no dashboard permissions
-        if (user && !user.is_superuser && !user.permissions?.includes('core.view_dashboard')) {
-            navigate('/profile', { replace: true });
-            return;
-        }
-        
-        fetchData();
-        const interval = setInterval(fetchData, 5000);
-        return () => clearInterval(interval);
-    }, [user, navigate]);
 
     const fetchData = async () => {
         try {
@@ -57,15 +44,24 @@ const Dashboard = () => {
                 { name: 'Failed', value: fetchedJobs.filter(j => j.status === 'failed').length, fill: '#EF4444' },
                 { name: 'Running', value: fetchedJobs.filter(j => j.status === 'running').length, fill: '#3B82F6' },
             ]);
-            setLoading(false);
         } catch (error) {
             console.error("Error fetching data:", error);
-            setLoading(false);
         }
     };
 
+    useEffect(() => {
+        if (user && !user.is_superuser && !user.permissions?.includes('core.view_dashboard')) {
+            navigate('/profile', { replace: true });
+            return;
+        }
+        
+        fetchData();
+        const interval = setInterval(fetchData, 5000);
+        return () => clearInterval(interval);
+    }, [user, navigate]);
+
     return (
-        <div className="space-y-8">
+        <div className="space-y-8">,
             <h1 className="text-2xl font-bold text-gray-800">Network Overview</h1>
 
             {/* Analytics Section */}

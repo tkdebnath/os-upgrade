@@ -147,19 +147,8 @@ const WorkflowEditor = () => {
                 { name: 'Software Distribution', step_type: 'distribution', order: 2, config: {} }
             ];
 
-            // Create workflow
             const res = await axios.post('/api/core/workflows/', { name: newWorkflowName, description: 'Custom workflow' });
 
-            // Immediately add mandatory steps
-            // Note: The API 'create' might return an empty workflow. We need to save the steps.
-            // We can reuse the save/update endpoint, but 'saveWorkflow' uses 'selectedWorkflow'.
-            // Alternatively, we can assume the backend creates empty and we just select it, 
-            // and the Local State 'steps' will be populated with our defaults, 
-            // and then user hits Save? 
-            // BETTER: Initialize 'steps' state with our forced steps upon selection.
-            // But if we fetch from backend, it will be empty.
-            // Solution: We must push these steps to backend immediately or frontend must handle "New Empty = Default Steps" logic.
-            // Let's UPDATE the workflow with mandatory steps right away.
             const newWf = res.data;
             await axios.post(`/api/core/workflows/${newWf.id}/update_steps/`, initialSteps);
 

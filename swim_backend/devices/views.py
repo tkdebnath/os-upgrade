@@ -1,15 +1,64 @@
-from rest_framework import viewsets, serializers
+from rest_framework import viewsets, serializers, filters
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAdminUser
+from rest_framework.filters import SearchFilter
+from django_filters.rest_framework import DjangoFilterBackend
+from django_filters import rest_framework as django_filters
 from .models import Device, Site, DeviceModel, Region, GlobalCredential
 import csv
 import io
+import os
 from .plugins.registry import PluginRegistry
 from swim_backend.core.services.sync_service import run_sync_task
 
 # Pull Image details from images app
 from swim_backend.images.views import ImageSerializer
+
+# Custom FilterSets to avoid 'model' field conflicts
+class DeviceFilter(django_filters.FilterSet):
+    # Standard filters (case-sensitive)
+    hostname = django_filters.CharFilter(lookup_expr='exact')
+    ip_address = django_filters.CharFilter(lookup_expr='icontains')
+    platform = django_filters.CharFilter(lookup_expr='exact')
+    version = django_filters.CharFilter(lookup_expr='exact')
+    family = django_filters.ChoiceFilter(choices=Device.FAMILY_CHOICES)
+    reachability = django_filters.CharFilter(lookup_expr='iexact')
+    last_sync_status = django_filters.CharFilter(lookup_expr='iexact')
+    mac_address = django_filters.CharFilter(lookup_expr='contains')
+    boot_method = django_filters.CharFilter(lookup_expr='contains')
+    site = django_filters.NumberFilter(field_name='site__id')
+    site__name = django_filters.CharFilter(field_name='site__name', lookup_expr='exact')
+    device_model = django_filters.NumberFilter(field_name='model__id')
+    
+    # Additional filters: case-insensitive exact match (__ie)
+    hostname__ie = django_filters.CharFilter(field_name='hostname', lookup_expr='iexact')
+    mac_address__ie = django_filters.CharFilter(field_name='mac_address', lookup_expr='iexact')
+    boot_method__ie = django_filters.CharFilter(field_name='boot_method', lookup_expr='iexact')
+    platform__ie = django_filters.CharFilter(field_name='platform', lookup_expr='iexact')
+    version__ie = django_filters.CharFilter(field_name='version', lookup_expr='iexact')
+    site__name__ie = django_filters.CharFilter(field_name='site__name', lookup_expr='iexact')
+    
+    # Additional filters: case-insensitive contains (__ic)
+    hostname__ic = django_filters.CharFilter(field_name='hostname', lookup_expr='icontains')
+    mac_address__ic = django_filters.CharFilter(field_name='mac_address', lookup_expr='icontains')
+    boot_method__ic = django_filters.CharFilter(field_name='boot_method', lookup_expr='icontains')
+    platform__ic = django_filters.CharFilter(field_name='platform', lookup_expr='icontains')
+    version__ic = django_filters.CharFilter(field_name='version', lookup_expr='icontains')
+    site__name__ic = django_filters.CharFilter(field_name='site__name', lookup_expr='icontains')
+    
+    class Meta:
+        model = Device
+        fields = ['hostname', 'ip_address', 'platform', 'version', 'family', 'reachability', 'last_sync_status', 'mac_address', 'boot_method', 'site', 'site__name', 'device_model']
+
+class DeviceModelFilter(django_filters.FilterSet):
+    name = django_filters.CharFilter(lookup_expr='icontains')
+    vendor = django_filters.CharFilter(lookup_expr='icontains')
+    golden_image_version = django_filters.CharFilter(lookup_expr='icontains')
+    
+    class Meta:
+        model = DeviceModel
+        fields = ['name', 'vendor', 'golden_image_version']
 
 class DeviceModelSerializer(serializers.ModelSerializer):
     supported_images_details = ImageSerializer(source='supported_images', many=True, read_only=True)
@@ -30,9 +79,23 @@ class RegionViewSet(viewsets.ModelViewSet):
     serializer_class = RegionSerializer
 
 class GlobalCredentialSerializer(serializers.ModelSerializer):
+    # Override password and secret fields to never return actual values
+    password = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    secret = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    
+    # Add read-only fields to indicate if password/secret are set
+    has_password = serializers.SerializerMethodField()
+    has_secret = serializers.SerializerMethodField()
+    
     class Meta:
         model = GlobalCredential
-        fields = '__all__'
+        fields = ['id', 'username', 'password', 'secret', 'has_password', 'has_secret']
+        
+    def get_has_password(self, obj):
+        return bool(obj.password)
+    
+    def get_has_secret(self, obj):
+        return bool(obj.secret)
 
 class GlobalCredentialViewSet(viewsets.ViewSet):
     
@@ -47,7 +110,19 @@ class GlobalCredentialViewSet(viewsets.ViewSet):
         return [IsSuperUser()]
     
     def list(self, request):
-        obj, _ = GlobalCredential.objects.get_or_create(id=1, defaults={'username': 'admin', 'password': 'password'})
+        # Get credentials from environment variables as defaults
+        default_username = os.getenv('GLOBAL_DEVICE_USERNAME', 'admin')
+        default_password = os.getenv('GLOBAL_DEVICE_PASSWORD', 'password')
+        default_secret = os.getenv('GLOBAL_DEVICE_SECRET', '')
+        
+        obj, _ = GlobalCredential.objects.get_or_create(
+            id=1, 
+            defaults={
+                'username': default_username,
+                'password': default_password,
+                'secret': default_secret
+            }
+        )
         serializer = GlobalCredentialSerializer(obj)
         return Response(serializer.data)
 
@@ -203,6 +278,14 @@ class DeviceSerializer(serializers.ModelSerializer):
 
 class DeviceModelViewSet(viewsets.ModelViewSet):
     serializer_class = DeviceModelSerializer
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_class = DeviceModelFilter
+    search_fields = [
+        'name', 'vendor', 'golden_image_version', 'golden_image_file',
+        'golden_image_path', 'golden_image_md5'
+    ]
+    ordering_fields = ['name', 'vendor', 'golden_image_version']
+    ordering = ['name']
     # Removed lookup_field to use default 'pk' (ID-based lookups)
     # lookup_value_regex removed as it's no longer needed
 
@@ -287,15 +370,135 @@ class DeviceModelViewSet(viewsets.ModelViewSet):
             "deleted_count": deleted_count
         })
 
+class DeviceSyncSerializer(serializers.Serializer):
+    """Serializer for device sync action"""
+    scope = serializers.ChoiceField(
+        choices=['all', 'site', 'selection'],
+        default='selection',
+        help_text="Sync scope: all devices, by site, or selection"
+    )
+    ids = serializers.ListField(
+        child=serializers.IntegerField(),
+        required=False,
+        default=list,
+        help_text="Device IDs (required for 'selection' scope)"
+    )
+    site = serializers.IntegerField(
+        required=False,
+        allow_null=True,
+        help_text="Site ID (required for 'site' scope)"
+    )
+
+
+class DeviceReadinessCheckSerializer(serializers.Serializer):
+    """Serializer for device readiness check action"""
+    ids = serializers.ListField(
+        child=serializers.IntegerField(),
+        help_text="List of device IDs to check"
+    )
+    image_map = serializers.DictField(
+        required=False,
+        default=dict,
+        help_text="Map of device ID to image ID {deviceId: imageId}"
+    )
+
+
+class DeviceDistributeImageSerializer(serializers.Serializer):
+    """Serializer for device image distribution"""
+    ids = serializers.ListField(
+        child=serializers.IntegerField(),
+        help_text="List of device IDs"
+    )
+    workflow_id = serializers.IntegerField(
+        required=False,
+        allow_null=True,
+        help_text="Workflow ID (optional)"
+    )
+
+
+class DeviceActivateImageSerializer(serializers.Serializer):
+    """Serializer for device image activation"""
+    ids = serializers.ListField(
+        child=serializers.IntegerField(),
+        help_text="List of device IDs"
+    )
+    image_map = serializers.DictField(
+        required=False,
+        default=dict,
+        help_text="Map of device ID to image ID"
+    )
+    checks = serializers.ListField(
+        child=serializers.IntegerField(),
+        required=False,
+        default=list,
+        help_text="Validation check IDs"
+    )
+    schedule_time = serializers.DateTimeField(
+        required=False,
+        allow_null=True,
+        help_text="Schedule activation time"
+    )
+    execution_config = serializers.DictField(
+        required=False,
+        default=dict,
+        help_text="Execution configuration (sequential/parallel device lists)"
+    )
+    task_name = serializers.CharField(
+        default='Activation-Task',
+        help_text="Task name"
+    )
+    workflow_id = serializers.IntegerField(
+        required=False,
+        allow_null=True,
+        help_text="Workflow ID"
+    )
+
+
+class DevicePluginActionSerializer(serializers.Serializer):
+    """Serializer for plugin actions"""
+    action = serializers.ChoiceField(
+        choices=['connect', 'metadata', 'preview', 'import'],
+        help_text="Plugin action type"
+    )
+    config = serializers.DictField(
+        required=False,
+        default=dict,
+        help_text="Plugin configuration"
+    )
+    filters = serializers.DictField(
+        required=False,
+        default=dict,
+        help_text="Filters for preview action"
+    )
+    devices = serializers.ListField(
+        required=False,
+        default=list,
+        help_text="Devices for import action"
+    )
+    defaults = serializers.DictField(
+        required=False,
+        default=dict,
+        help_text="Default values for import"
+    )
+
+
 class DeviceViewSet(viewsets.ModelViewSet):
     queryset = Device.objects.all()
     serializer_class = DeviceSerializer
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_class = DeviceFilter
+    search_fields = [
+        'hostname', 'ip_address', 'platform', 'version', 'family',
+        'boot_method', 'mac_address', 'reachability', 'last_sync_status',
+        'site__name', 'model__name'
+    ]
+    ordering_fields = ['hostname', 'ip_address', 'version', 'family', 'reachability', 'last_sync_time']
+    ordering = ['hostname']
 
-    @action(detail=False, methods=['post'])
+    @action(detail=False, methods=['post'], serializer_class=DeviceSyncSerializer)
     def sync(self, request):
         """
         Trigger sync (version discovery) for devices.
-        Scope: 'all', 'site', 'selection' (list of IDs).
         """
         # Check permission
         if not request.user.has_perm('devices.sync_device_inventory'):
@@ -313,11 +516,10 @@ class DeviceViewSet(viewsets.ModelViewSet):
         count = run_sync_task(scope_type, scope_value)
         return Response({"status": "started", "count": count})
 
-    @action(detail=False, methods=['post'])
+    @action(detail=False, methods=['post'], serializer_class=DeviceReadinessCheckSerializer)
     def check_readiness(self, request):
         """
         Runs pre-upgrade checks on a list of devices.
-        Checks: Reachability, Compliance, config-register, flash space.
         """
         # Check permission
         if not request.user.has_perm('devices.check_device_readiness'):
@@ -346,7 +548,7 @@ class DeviceViewSet(viewsets.ModelViewSet):
                 self.selected_checks = Device.objects.none() # Empty QuerySet-like
 
         for dev in devices:
-            # 1. Determine Target Image Size and Info
+            # Determine Target Image Size and Info
             target_size = 0
             golden_version = None
             target_image_file = None
@@ -374,10 +576,10 @@ class DeviceViewSet(viewsets.ModelViewSet):
                 elif dev.model.golden_image_version:
                     golden_version = dev.model.golden_image_version
                     target_image_file = dev.model.golden_image_file
-                    # 1. Prefer Explicit Size from Standard
+                    # Prefer Explicit Size from Standard
                     if dev.model.golden_image_size:
                         target_size = dev.model.golden_image_size
-                    # 2. Fallback to Image Object Size
+                    # Fallback to Image Object Size
                     elif dev.model.golden_image_file:
                         img = Image.objects.filter(filename=dev.model.golden_image_file).first()
                         if img:
@@ -386,14 +588,14 @@ class DeviceViewSet(viewsets.ModelViewSet):
                             # Default fallback if image record missing but file defined (e.g. 500MB)
                             target_size = 500 * 1024 * 1024 
 
-            # 2. Run Real Checks
+            # Run Real Checks
             # Use a consistent session key for logs
             session_id = f"readiness_check_{dev.id}"
             mock_job = MockJob(session_id, target_size)
             
             ready, check_results = check_readiness(dev, mock_job)
             
-            # 3. Map Results to UI Format
+            # Map Results to UI Format
             ui_checks = []
             
             # Map 'connection' -> Reachability
@@ -453,7 +655,7 @@ class DeviceViewSet(viewsets.ModelViewSet):
             
         return Response(results)
 
-    @action(detail=False, methods=['post'])
+    @action(detail=False, methods=['post'], serializer_class=DeviceDistributeImageSerializer)
     def distribute_image(self, request):
         """
         Initiates image distribution job using the SELECTED WORKFLOW.
@@ -587,7 +789,7 @@ class DeviceViewSet(viewsets.ModelViewSet):
             "message": f"Distribution started for {len(device_ids)} devices."
         })
 
-    @action(detail=False, methods=['post'])
+    @action(detail=False, methods=['post'], serializer_class=DeviceActivateImageSerializer)
     def activate_image(self, request):
         """
         Initiates image activation job with checks.
@@ -628,7 +830,7 @@ class DeviceViewSet(viewsets.ModelViewSet):
         job_map = {} # device_id -> job_id
         
         # Prepare Dynamic Execution Plan
-        # 1. Fetch Workflow Logic
+        # Fetch Workflow Logic
         execution_plan = []
         workflow_obj = None
         
@@ -735,14 +937,14 @@ class DeviceViewSet(viewsets.ModelViewSet):
                     pass
             job.save()
 
-        # 1. Sequential Jobs
+        # Sequential Jobs
         for idx, dev_id in enumerate(seq_ids):
             # For sequential, only the first one is 'scheduled' (if scheduling). 
             # The rest are pending.
             is_active = (idx == 0)
             create_activation_job(dev_id, 'sequential', is_active)
             
-        # 2. Parallel Jobs
+        # Parallel Jobs
         for dev_id in par_ids:
             # All parallel jobs are 'scheduled' if a time is set
             create_activation_job(dev_id, 'parallel', True)
@@ -775,11 +977,10 @@ class DeviceViewSet(viewsets.ModelViewSet):
     def list_plugins(self, request):
         return Response(PluginRegistry.list_plugins())
 
-    @action(detail=False, methods=['post'], url_path='plugin/(?P<plugin_id>[^/.]+)/action')
+    @action(detail=False, methods=['post'], url_path='plugin/(?P<plugin_id>[^/.]+)/action', serializer_class=DevicePluginActionSerializer)
     def plugin_action(self, request, plugin_id=None):
         """
         Generic endpoint for plugin interactions.
-        Action types: 'connect', 'metadata', 'preview', 'import'.
         """
         plugin = PluginRegistry.get_plugin(plugin_id)
         if not plugin:
@@ -807,7 +1008,7 @@ class DeviceViewSet(viewsets.ModelViewSet):
 
                 for dev in devices:
                     try:
-                        # 1. Strict Validation
+                        # Strict Validation
                         ip_addr = dev.get('ip_address')
                         hostname = dev.get('name')
                         platform = dev.get('platform')
@@ -820,22 +1021,22 @@ class DeviceViewSet(viewsets.ModelViewSet):
                              errors.append(f"Skipped {hostname or ip_addr}: Missing Platform")
                              continue
 
-                        # 2. Hostname Fallback
+                        # Hostname Fallback
                         if not hostname:
                             hostname = ip_addr
 
-                        # 3. Duplicate IP Check
+                        # Duplicate IP Check
                         # Check if IP exists on a DIFFERENT device
                         existing_with_ip = Device.objects.filter(ip_address=ip_addr).first()
                         if existing_with_ip and existing_with_ip.hostname != hostname:
                             errors.append(f"Skipped {hostname}: IP {ip_addr} already exists on {existing_with_ip.hostname}")
                             continue
 
-                        # 4. Site Handling
+                        # Site Handling
                         site_name = dev.get('site', 'Global')
                         site_obj, _ = Site.objects.get_or_create(name=site_name)
 
-                        # 5. Device Update/Create
+                        # Device Update/Create
                         Device.objects.update_or_create(
                             hostname=hostname,
                             defaults={
@@ -880,7 +1081,7 @@ class DeviceViewSet(viewsets.ModelViewSet):
         
         for row in reader:
             try:
-                # 1. Validation (Strict: IP and Site required)
+                # Validation (Strict: IP and Site required)
                 ip_addr = row.get('ip_address')
                 site_name = row.get('site')
                 
@@ -911,19 +1112,19 @@ class DeviceViewSet(viewsets.ModelViewSet):
                          errors.append(f"Row skipped: IP {ip_addr} already exists on device {existing_with_ip.hostname}")
                          continue
 
-                # 2. Hostname Fallback
+                # Hostname Fallback
                 hostname = row.get('hostname')
                 if not hostname:
                     hostname = ip_addr
 
-                # 3. Region Handling (Optional)
+                # Region Handling (Optional)
                 region_name = row.get('region')
                 region_obj = None
                 if region_name:
                     from .models import Region
                     region_obj, _ = Region.objects.get_or_create(name=region_name)
 
-                # 4. Site Handling (Link to Region if provided)
+                # Site Handling (Link to Region if provided)
                 site_defaults = {}
                 if region_obj:
                     site_defaults['region'] = region_obj
@@ -933,13 +1134,13 @@ class DeviceViewSet(viewsets.ModelViewSet):
                     defaults=site_defaults
                 )
 
-                # 5. Model Handling (Optional)
+                # Model Handling (Optional)
                 model_name = row.get('model')
                 model_obj = None
                 if model_name:
                     model_obj, _ = DeviceModel.objects.get_or_create(name=model_name)
 
-                # 6. Device Creation/Update
+                # Device Creation/Update
                 Device.objects.update_or_create(
                     hostname=hostname,
                     defaults={

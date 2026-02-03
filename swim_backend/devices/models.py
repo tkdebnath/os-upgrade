@@ -1,4 +1,6 @@
 from django.db import models
+from django.core.exceptions import ValidationError
+from django.conf import settings
 
 class Region(models.Model):
     name = models.CharField(max_length=100, unique=True)
@@ -82,6 +84,24 @@ class Device(models.Model):
             ("upgrade_device_firmware", "Can upgrade device firmware"),
             ("check_device_readiness", "Can check device readiness"),
         ]
+    
+    def clean(self):
+        """Validate device model against allowed models"""
+        super().clean()
+        
+        # Check if model restriction is enabled and model is set
+        if hasattr(settings, 'ALLOWED_DEVICE_MODELS') and settings.ALLOWED_DEVICE_MODELS is not None:
+            if self.model:
+                model_name = self.model.name
+                if model_name not in settings.ALLOWED_DEVICE_MODELS:
+                    raise ValidationError({
+                        'model': f'Device model "{model_name}" is not allowed. Allowed models: {", ".join(settings.ALLOWED_DEVICE_MODELS)}'
+                    })
+    
+    def save(self, *args, **kwargs):
+        """Override save to call full_clean for validation"""
+        self.full_clean()
+        super().save(*args, **kwargs)
     
     def __str__(self):
         return self.hostname

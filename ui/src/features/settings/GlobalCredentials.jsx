@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Lock, User, Save, Eye, EyeOff } from 'lucide-react';
+import { Lock, User, Save } from 'lucide-react';
 
 const GlobalCredentials = () => {
     const [formData, setFormData] = useState({
@@ -9,8 +9,6 @@ const GlobalCredentials = () => {
         secret: ''
     });
     const [loading, setLoading] = useState(true);
-    const [showPassword, setShowPassword] = useState(false);
-    const [showSecret, setShowSecret] = useState(false);
     const [message, setMessage] = useState(null);
 
     useEffect(() => {
@@ -20,7 +18,13 @@ const GlobalCredentials = () => {
     const fetchData = async () => {
         try {
             const res = await axios.get('/api/dcim/global-credentials/');
-            setFormData(res.data);
+            // Don't populate password fields with fetched data (backend returns write_only)
+            // Keep password fields empty and use placeholders
+            setFormData({
+                username: res.data.username || '',
+                password: '', // Never populate from API
+                secret: ''    // Never populate from API
+            });
         } catch (error) {
             console.error(error);
         } finally {
@@ -31,9 +35,17 @@ const GlobalCredentials = () => {
     const handleSubmit = async (e) => {
         e.preventDefault();
         setMessage(null);
+        
+        // Only send fields that have values (to avoid overwriting with empty strings)
+        const payload = { username: formData.username };
+        if (formData.password) payload.password = formData.password;
+        if (formData.secret) payload.secret = formData.secret;
+        
         try {
-            await axios.post('/api/dcim/global-credentials/', formData);
+            await axios.post('/api/dcim/global-credentials/', payload);
             setMessage({ type: 'success', text: 'Global credentials updated successfully.' });
+            // Clear password fields after successful update
+            setFormData({ ...formData, password: '', secret: '' });
         } catch (error) {
             setMessage({ type: 'error', text: 'Failed to update credentials.' });
         }
@@ -77,40 +89,28 @@ const GlobalCredentials = () => {
                         <div className="relative">
                             <Lock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                             <input
-                                type={showPassword ? "text" : "password"}
-                                required
-                                className="w-full border border-gray-300 rounded pl-9 pr-10 py-2 text-sm focus:ring-orange-500 focus:border-orange-500"
+                                type="password"
+                                placeholder="Enter new password to change"
+                                className="w-full border border-gray-300 rounded pl-9 pr-3 py-2 text-sm focus:ring-orange-500 focus:border-orange-500"
                                 value={formData.password}
                                 onChange={e => setFormData({ ...formData, password: e.target.value })}
                             />
-                            <button
-                                type="button"
-                                onClick={() => setShowPassword(!showPassword)}
-                                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                            >
-                                {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                            </button>
                         </div>
+                        <p className="text-xs text-gray-400 mt-1">Leave empty to keep current password</p>
                     </div>
                     <div>
                         <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Enable Secret</label>
                         <div className="relative">
                             <Lock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                             <input
-                                type={showSecret ? "text" : "password"}
-                                className="w-full border border-gray-300 rounded pl-9 pr-10 py-2 text-sm focus:ring-orange-500 focus:border-orange-500"
+                                type="password"
+                                placeholder="Enter new secret to change"
+                                className="w-full border border-gray-300 rounded pl-9 pr-3 py-2 text-sm focus:ring-orange-500 focus:border-orange-500"
                                 value={formData.secret || ''}
-                                placeholder="Optional"
                                 onChange={e => setFormData({ ...formData, secret: e.target.value })}
                             />
-                            <button
-                                type="button"
-                                onClick={() => setShowSecret(!showSecret)}
-                                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                            >
-                                {showSecret ? <EyeOff size={16} /> : <Eye size={16} />}
-                            </button>
                         </div>
+                        <p className="text-xs text-gray-400 mt-1">Leave empty to keep current secret</p>
                     </div>
                 </div>
 

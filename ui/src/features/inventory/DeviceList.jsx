@@ -127,19 +127,17 @@ const Devices = () => {
     const uniqueModels = [...new Set(devices.map(d => d.model).filter(Boolean))].sort();
 
     const filteredDevices = devices.filter(dev => {
-        // 1. Structured Filters
         if (filterSite && (dev.site || 'Global') !== filterSite) return false;
         if (filterModel && dev.model !== filterModel) return false;
         if (filterStatus && (dev.last_sync_status || 'Pending') !== filterStatus) return false;
 
-        // 2. Text Search (Generic)
         const searchLower = searchTerm.toLowerCase();
         if (searchTerm && !((dev.hostname || '').toLowerCase().includes(searchLower) ||
             (dev.ip_address || '').includes(searchLower))) {
             return false;
         }
 
-        // 2. Sidebar Filters (OR logic)
+        // Sidebar filters use OR logic
         if (selectedFilters.size === 0) return true;
 
         let matchesFilter = false;
@@ -388,13 +386,6 @@ const Devices = () => {
     // Better approach: Import useNavigate at top and use it
 
     // ... (This replace block is tricky without imports. Let's fix imports first in another block or do it carefully)
-
-    // Actual implementation plan:
-    // 1. Add hook call at top: const navigate = useNavigate();
-    // 2. Update handleUpgrade to use navigate('/upgrade', { state: { selectedDevices: Array.from(selectedDevices) } })
-
-    // Let's do step 1 and 2 in separate replace calls or one smart one.
-    // I will use a larger block to add import and hook.
 
     return (
         <div className="space-y-4">

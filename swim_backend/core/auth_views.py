@@ -5,6 +5,9 @@ from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.models import Group
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.utils.decorators import method_decorator
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class LoginView(APIView):
@@ -18,20 +21,26 @@ class LoginView(APIView):
         if not username or not password:
             return Response({'error': 'Username and password required'}, status=400)
         
-        user = authenticate(request, username=username, password=password)
-        
-        if user is not None:
-            login(request, user)
-            return Response({
-                'id': user.id,
-                'username': user.username,
-                'email': user.email,
-                'is_staff': user.is_staff,
-                'is_superuser': user.is_superuser,
-                'groups': list(user.groups.values_list('name', flat=True))
-            })
-        else:
-            return Response({'error': 'Invalid credentials'}, status=401)
+        try:
+            user = authenticate(request, username=username, password=password)
+            
+            if user is not None:
+                login(request, user)
+                logger.info(f"Login successful for user: {username}")
+                return Response({
+                    'id': user.id,
+                    'username': user.username,
+                    'email': user.email,
+                    'is_staff': user.is_staff,
+                    'is_superuser': user.is_superuser,
+                    'groups': list(user.groups.values_list('name', flat=True))
+                })
+            else:
+                logger.warning(f"Login failed for user: {username} - Invalid credentials or user not found in LDAP")
+                return Response({'error': 'Invalid credentials'}, status=401)
+        except Exception as e:
+            logger.error(f"Login error for user {username}: {str(e)}", exc_info=True)
+            return Response({'error': 'Authentication error occurred'}, status=500)
 
 
 class LogoutView(APIView):

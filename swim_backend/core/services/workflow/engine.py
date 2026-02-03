@@ -57,7 +57,7 @@ class WorkflowEngine:
         job.status = 'running'
         job.save()
 
-        # 2. Determine Execution Plan (Dynamic or Static)
+        # Determine Execution Plan (Dynamic or Static)
         # Check if job.steps already contains a PLAN (steps with 'step_type')
         # This allows views to inject a specific sequence (e.g. Distribution Only)
         job.refresh_from_db()
@@ -149,7 +149,7 @@ class WorkflowEngine:
         # If we got here, workflow is done
         log_update(self.job_id, "")
         log_update(self.job_id, "="*80)
-        log_update(self.job_id, "🎉 WORKFLOW COMPLETED SUCCESSFULLY")
+        log_update(self.job_id, "WORKFLOW COMPLETED SUCCESSFULLY")
         log_update(self.job_id, "="*80)
         job.status = 'success' # Or partial?
         job.save(update_fields=['status'])

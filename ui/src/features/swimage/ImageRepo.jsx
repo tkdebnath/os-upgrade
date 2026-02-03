@@ -29,30 +29,16 @@ const ImageRepo = () => {
 
     const handleSetDefault = async (id) => {
         try {
-            // Optimistic Update
             const updatedServers = fileServers.map(fs => ({
                 ...fs,
                 is_global_default: fs.id === id
             }));
             setFileServers(updatedServers);
 
-            // In a real app we might need a specific endpoint to "set default" which handles the exclusion of others,
-            // or we iterate and update. Backend logic for "single default" might be needed.
-            // For now, let's assume we patch the target to True. 
-            // Ideally the backend ensures only one is True.
-            // Let's iterate and patch relevant ones or just patch the new Default.
-
-            // NOTE: Simplest way: First patch all to false (inefficient) or assume backend handles it?
-            // Let's assume we need to patch the new one to True, and the backend might not auto-unset others unless we added that logic.
-            // I didn't add logic to auto-unset others in models.save(). So I should do it here or backend view.
-
-            // Let's do it simply: 
-            // 1. Unset current default
             const currentDefault = fileServers.find(fs => fs.is_global_default);
             if (currentDefault && currentDefault.id !== id) {
                 await axios.patch(`/api/images/file-servers/${currentDefault.id}/`, { is_global_default: false });
             }
-            // 2. Set new default
             await axios.patch(`/api/images/file-servers/${id}/`, { is_global_default: true });
 
             fetchData(); // Refresh to be sure

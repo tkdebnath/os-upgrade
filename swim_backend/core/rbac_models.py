@@ -86,8 +86,8 @@ class PermissionBundle(models.Model):
             for action in actions:
                 # Try different codename formats
                 possible_codenames = [
+                    action,  # Exact match first (for custom permissions like can_delete_ztp)
                     f"{action}_{content_type.model}",  # Standard: view_device
-                    action,  # Just the action: view
                 ]
                 
                 # For models with custom permissions, try action_modelname variations

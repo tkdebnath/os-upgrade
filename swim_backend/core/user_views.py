@@ -94,6 +94,12 @@ class GroupSerializer(serializers.ModelSerializer):
     def get_user_count(self, obj):
         return obj.user_set.count()
 
+
+class SetPasswordSerializer(serializers.Serializer):
+    """Serializer for setting user password"""
+    password = serializers.CharField(write_only=True, help_text="New password")
+
+
 class UserViewSet(viewsets.ModelViewSet):
     queryset = User.objects.all().order_by('-date_joined')
     serializer_class = UserSerializer
@@ -112,13 +118,10 @@ class UserViewSet(viewsets.ModelViewSet):
                 if request.user.is_superuser:
                     return True
                 
-                # For list action, only superusers
-                if view.action == 'list':
-                    return False
-                    
-                # For create, only superusers
-                if view.action == 'create':
-                    return False
+                # Staff users can create and list users
+                if request.user.is_staff:
+                    if view.action in ['list', 'create']:
+                        return True
                 
                 # For retrieve/update/partial_update, check if it's their own profile
                 return view.action in ['retrieve', 'update', 'partial_update', 'set_password']
@@ -126,6 +129,10 @@ class UserViewSet(viewsets.ModelViewSet):
             def has_object_permission(self, request, view, obj):
                 # Superusers can do anything
                 if request.user.is_superuser:
+                    return True
+                
+                # Staff users can manage other users (but not delete)
+                if request.user.is_staff and view.action != 'destroy':
                     return True
                 
                 # Users can only access their own profile
@@ -138,8 +145,8 @@ class UserViewSet(viewsets.ModelViewSet):
         return [CanManageUser()]
     
     def get_queryset(self):
-        """Regular users can only see their own profile"""
-        if self.request.user.is_superuser:
+        """Regular users can only see their own profile, staff can see all"""
+        if self.request.user.is_superuser or self.request.user.is_staff:
             return User.objects.all().order_by('-date_joined')
         return User.objects.filter(id=self.request.user.id)
     
@@ -170,7 +177,7 @@ class UserViewSet(viewsets.ModelViewSet):
         """Override partial_update with same restrictions"""
         return self.update(request, *args, **kwargs)
     
-    @action(detail=True, methods=['post'])
+    @action(detail=True, methods=['post'], serializer_class=SetPasswordSerializer)
     def set_password(self, request, pk=None):
         user = self.get_object()
         password = request.data.get('password')

@@ -41,11 +41,7 @@ class ActivityLogViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = ActivityLogSerializer
     permission_classes = [IsAuthenticated]
     pagination_class = ActivityLogPagination
-    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['action', 'user', 'content_type']
-    search_fields = ['object_repr', 'user__username', 'ip_address']
-    ordering_fields = ['timestamp', 'action', 'user']
-    ordering = ['-timestamp']
+    filter_backends = []  # Explicitly disable filters to prevent 'model' field error
     
     def get_queryset(self):
         """Users can only see their own logs unless they're superuser"""

@@ -45,7 +45,7 @@ const Layout = () => {
             <aside className="w-64 bg-gray-900 text-white flex flex-col shadow-xl z-20">
                 <div className="h-16 flex items-center px-6 border-b border-gray-800">
                     <Activity className="h-8 w-8 text-blue-500 mr-2" />
-                    <span className="text-xl font-bold tracking-wide">SWIM<span className="text-blue-500">Pro</span></span>
+                    <span className="text-xl font-bold tracking-wide">OS <span className="text-blue-500">Upgrade</span></span>
                 </div>
 
                 <nav className="flex-1 px-4 py-6 space-y-2">
@@ -77,10 +77,12 @@ const Layout = () => {
                         <SidebarItem to="/checks" icon={Shield} label="Compliance Checks" />
                     )}
 
-                    <div className="pt-4">
-                        <p className="px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Automation</p>
-                        <SidebarItem to="/ztp" icon={Zap} label="Zero Touch Prov." />
-                    </div>
+                    {(can('core.can_view_ztp') || user.is_superuser) && (
+                        <div className="pt-4">
+                            <p className="px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Automation</p>
+                            <SidebarItem to="/ztp" icon={Zap} label="Zero Touch Prov." />
+                        </div>
+                    )}
 
                     <div className="pt-6">
                         <p className="px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">System</p>
@@ -106,7 +108,7 @@ const Layout = () => {
             <div className="flex-1 flex flex-col overflow-hidden">
                 {/* Header */}
                 <header className="h-16 bg-white shadow-sm flex items-center justify-between px-8 z-10">
-                    <h2 className="text-xl font-semibold text-gray-800">Campus Fabric Manager</h2>
+                    <h2 className="text-xl font-semibold text-gray-800">Cisco Switch OS Upgrade</h2>
                     <div className="flex items-center space-x-4">
                         {/* Status Badge */}
                         {user.is_superuser && (

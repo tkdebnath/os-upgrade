@@ -39,7 +39,44 @@ if LDAP_ENABLED:
             AUTH_LDAP_GROUP_TYPE = GroupOfNamesType()
         
         # Mirror LDAP groups to Django
-        AUTH_LDAP_MIRROR_GROUPS = os.getenv('LDAP_MIRROR_GROUPS', 'False').lower() == 'true'
+        mirror_groups = os.getenv('LDAP_MIRROR_GROUPS', 'False').lower() == 'true'
+        mirror_only_permission_groups = os.getenv('LDAP_MIRROR_ONLY_PERMISSION_GROUPS', 'True').lower() == 'true'
+        
+        if mirror_only_permission_groups and not mirror_groups:
+            # Create Django groups for permission groups but don't sync all user's AD groups
+            # This ensures the permission groups exist in Django without syncing everything
+            AUTH_LDAP_MIRROR_GROUPS = False
+            AUTH_LDAP_FIND_GROUP_PERMS = True
+            
+            # Store permission group names for signal handler
+            permission_group_names = []
+            
+            if os.getenv('LDAP_GROUP_STAFF'):
+                # Extract CN from DN (e.g., "cn=NetboxReadWriteAccess,ou=..." -> "NetboxReadWriteAccess")
+                staff_dn = os.getenv('LDAP_GROUP_STAFF')
+                staff_name = staff_dn.split(',')[0].replace('cn=', '').replace('CN=', '')
+                permission_group_names.append(staff_name)
+            
+            if os.getenv('LDAP_GROUP_SUPERUSER'):
+                superuser_dn = os.getenv('LDAP_GROUP_SUPERUSER')
+                superuser_name = superuser_dn.split(',')[0].replace('cn=', '').replace('CN=', '')
+                permission_group_names.append(superuser_name)
+            
+            if os.getenv('LDAP_GROUP_ACTIVE'):
+                active_dn = os.getenv('LDAP_GROUP_ACTIVE')
+                active_name = active_dn.split(',')[0].replace('cn=', '').replace('CN=', '')
+                permission_group_names.append(active_name)
+            
+            if os.getenv('LDAP_REQUIRE_GROUP'):
+                require_dn = os.getenv('LDAP_REQUIRE_GROUP')
+                require_name = require_dn.split(',')[0].replace('cn=', '').replace('CN=', '')
+                permission_group_names.append(require_name)
+            
+            # Store for later use in signal handler (don't import Group here - apps not ready yet)
+            LDAP_PERMISSION_GROUP_NAMES = list(set(permission_group_names))
+        else:
+            # Mirror all groups or none based on LDAP_MIRROR_GROUPS setting
+            AUTH_LDAP_MIRROR_GROUPS = mirror_groups
     
     # User Attribute Mapping
     AUTH_LDAP_USER_ATTR_MAP = {
@@ -101,11 +138,13 @@ else:
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Quick-start development settings - unsuitable for production
-SECRET_KEY = 'django-insecure-change-me-in-production'
+SECRET_KEY = os.getenv('SECRET_KEY', '')
 
-DEBUG = True
+DEBUG = os.getenv('DEBUG', 'False').lower() in ('true', '1', 'yes')
 
-ALLOWED_HOSTS = []
+# Parse ALLOWED_HOSTS from environment variable
+allowed_hosts_env = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1')
+ALLOWED_HOSTS = [host.strip() for host in allowed_hosts_env.split(',')]
 
 # Application definition
 
@@ -133,6 +172,7 @@ INSTALLED_APPS = [
     'corsheaders',
     'django_extensions',
     'django_filters',
+    'django_celery_beat',
     
     # Local
     'swim_backend.core',
@@ -143,6 +183,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -180,6 +221,32 @@ DATABASES = {
     }
 }
 
+# Override with DATABASE_URL if provided (for PostgreSQL in production)
+DATABASE_URL = os.getenv('DATABASE_URL', None)
+if not DATABASE_URL:
+    DB_NAME = os.getenv('POSTGRES_DB', 'swimdb')
+    DB_USER = os.getenv('POSTGRES_USER', 'swimuser')
+    DB_PASSWORD = os.getenv('POSTGRES_PASSWORD', 'swimpass')
+    DB_HOST = os.getenv('DB_HOST', 'db')
+    DB_PORT = os.getenv('DB_PORT', '5432')
+    DATABASE_URL = f'postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}'
+
+if DATABASE_URL.startswith('postgresql://'):
+    import re
+    # Parse postgresql://user:password@host:port/dbname
+    match = re.match(r'postgresql://([^:]+):([^@]+)@([^:]+):(\d+)/(.+)', DATABASE_URL)
+    if match:
+        DATABASES = {
+            'default': {
+                'ENGINE': 'django.db.backends.postgresql',
+                'NAME': match.group(5),
+                'USER': match.group(1),
+                'PASSWORD': match.group(2),
+                'HOST': match.group(3),
+                'PORT': match.group(4),
+            }
+        }
+
 # Password validation
 AUTH_PASSWORD_VALIDATORS = [
     {
@@ -203,10 +270,13 @@ USE_I18N = True
 USE_TZ = True
 
 # Static files (CSS, JavaScript, Images)
-STATIC_URL = 'static/'
+STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'static'
 
-MEDIA_URL = 'media/'
+# WhiteNoise configuration for serving static files
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+
+MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
 # Default primary key field type
@@ -214,18 +284,49 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # CORS
 # CORS settings - allow credentials for session auth
-CORS_ALLOW_ALL_ORIGINS = False
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-]
+# Allow all origins in development (wildcard * in ALLOWED_HOSTS)
+# In production, configure specific origins
+if '*' in ALLOWED_HOSTS:
+    CORS_ALLOW_ALL_ORIGINS = True
+else:
+    CORS_ALLOW_ALL_ORIGINS = False
+    CORS_ALLOWED_ORIGINS = [
+        "http://localhost",
+        "https://localhost",
+        "http://127.0.0.1",
+        "https://127.0.0.1",
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ]
 CORS_ALLOW_CREDENTIALS = True
 
 # CSRF settings for cross-origin requests
-CSRF_TRUSTED_ORIGINS = [
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-]
+# Build CSRF_TRUSTED_ORIGINS from ALLOWED_HOSTS
+CSRF_TRUSTED_ORIGINS = []
+for host in ALLOWED_HOSTS:
+    if host and host != '*':
+        # Add both http and https for each host
+        if not host.startswith('http'):
+            CSRF_TRUSTED_ORIGINS.append(f'http://{host}')
+            CSRF_TRUSTED_ORIGINS.append(f'https://{host}')
+        else:
+            CSRF_TRUSTED_ORIGINS.append(host)
+
+# Always include common development origins
+CSRF_TRUSTED_ORIGINS.extend([
+    'http://localhost',
+    'https://localhost',
+    'http://127.0.0.1',
+    'https://127.0.0.1',
+    'http://localhost:80',
+    'https://localhost:443',
+    'http://127.0.0.1:80',
+    'https://127.0.0.1:443',
+])
+
+# Remove duplicates
+CSRF_TRUSTED_ORIGINS = list(set(CSRF_TRUSTED_ORIGINS))
+
 CSRF_COOKIE_SAMESITE = 'Lax'
 CSRF_COOKIE_HTTPONLY = False  # Allow JavaScript to read CSRF token
 SESSION_COOKIE_SAMESITE = 'Lax'
@@ -248,6 +349,8 @@ REST_FRAMEWORK = {
         'rest_framework.renderers.BrowsableAPIRenderer',
     ],
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+    # Explicitly disable django-filters to prevent 'model' field error
+    'DEFAULT_FILTER_BACKENDS': [],
 }
 
 # Spectacular (Swagger) Settings
@@ -284,6 +387,12 @@ SPECTACULAR_SETTINGS = {
         {'ApiKeyAuth': []},
         {'SessionAuth': []},
     ],
+    # Disable problematic extensions
+    'DISABLE_ERRORS_AND_WARNINGS': False,
+    'PREPROCESSING_HOOKS': [],
+    'POSTPROCESSING_HOOKS': [],
+    # Explicitly disable django-filters extension to prevent 'model' field error
+    'SCHEMA_COERCE_METHOD_NAMES': {},
 }
 
 # LDAP Configuration
@@ -292,4 +401,52 @@ SPECTACULAR_SETTINGS = {
 # AUTH_LDAP_SERVER_URI = "ldap://ldap.example.com"
 # ... set AUTHENTICATION_BACKENDS to include 'django_auth_ldap.backend.LDAPBackend'
 
+# Logging Configuration
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '{levelname} {asctime} {module} {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'verbose',
+        },
+    },
+    'loggers': {
+        'django_auth_ldap': {
+            'handlers': ['console'],
+            'level': 'DEBUG' if os.getenv('LDAP_DEBUG', 'False').lower() == 'true' else 'INFO',
+        },
+        'swim_backend.core.auth_views': {
+            'handlers': ['console'],
+            'level': 'INFO',
+        },
+        'swim_backend.ldap_signals': {
+            'handlers': ['console'],
+            'level': 'INFO',
+        },
+    },
+}
+
 from .unfold_settings import UNFOLD
+
+# ============================================================================
+# SWIM - Device Model Restrictions
+# ============================================================================
+# Restrict which device models can be added to inventory
+# Set to None to allow all models, or provide a list of allowed models
+# Example: ['Catalyst 9300', 'Catalyst 9400', 'Nexus 9000']
+ALLOWED_DEVICE_MODELS = None  # Change this to restrict models
+
+# Example restricted configuration:
+# ALLOWED_DEVICE_MODELS = [
+#     'Catalyst 9200', 'Catalyst 9300', 'Catalyst 9400', 'Catalyst 9500', 'Catalyst 9600',
+#     'C9200', 'C9300', 'C9400', 'C9500', 'C9600',
+#     'Nexus 3000', 'Nexus 5000', 'Nexus 7000', 'Nexus 9000',
+#     'N3K', 'N5K', 'N7K', 'N9K',
+# ]

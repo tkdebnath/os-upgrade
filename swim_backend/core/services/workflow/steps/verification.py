@@ -80,7 +80,7 @@ class VerificationStep(BaseStep):
             # Compare
             # Normalize strings (trim whitespace, maybe lower case)
             if str(current_version).strip().lower() == str(target_version).strip().lower():
-                self.log("✅ SUCCESS: Device version matches target version.")
+                self.log("SUCCESS: Device version matches target version.")
                 return 'success', f"Match: {current_version}"
             else:
                 self.log(f"❌ FAILURE: Version Mismatch. Expected: {target_version}, Found: {current_version}")

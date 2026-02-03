@@ -2,9 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { Plus, Zap, Play, Pause, X, Search, RefreshCw, Trash2, Eye } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
 const ZTPManagement = () => {
     const navigate = useNavigate();
+    const { user, can } = useAuth();
     const [workflows, setWorkflows] = useState([]);
     const [availableWorkflows, setAvailableWorkflows] = useState([]);
     const [validationChecks, setValidationChecks] = useState([]);
@@ -38,11 +40,15 @@ const ZTPManagement = () => {
                 axios.get('/api/core/workflows/'),
                 axios.get('/api/dcim/sites/'),
                 axios.get('/api/dcim/device-models/'),
-                axios.get('/api/core/validation-checks/')
+                axios.get('/api/core/checks/')
             ]);
 
+            console.log('Workflows API response:', wfRes.data);
+            const workflows = wfRes.data.results || wfRes.data;
+            console.log('Available workflows:', workflows);
+
             setWorkflows(ztpRes.data.results || ztpRes.data);
-            setAvailableWorkflows(wfRes.data.results || wfRes.data);
+            setAvailableWorkflows(workflows);
             setSites(sitesRes.data.results || sitesRes.data);
             setModels(modelsRes.data.results || modelsRes.data);
             setValidationChecks(checksRes.data.results || checksRes.data);
@@ -129,6 +135,17 @@ const ZTPManagement = () => {
         return colors[status] || 'bg-gray-100 text-gray-600 ring-gray-200';
     };
 
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center h-64">
+                <div className="text-center">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                    <p className="text-gray-600">Loading ZTP workflows...</p>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="space-y-6">
             <div className="flex justify-between items-center">
@@ -138,12 +155,14 @@ const ZTPManagement = () => {
                     </h1>
                 <p className="text-gray-600 mt-1">Auto-discover devices, check IOS compliance, and upgrade to golden image</p>
                 </div>
-                <button
-                    onClick={() => setShowCreateModal(true)}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition flex items-center gap-2 font-semibold"
-                >
-                    <Plus size={20} /> Create ZTP Endpoint
-                </button>
+                {(can('core.can_manage_ztp') || user?.is_superuser) && (
+                    <button
+                        onClick={() => setShowCreateModal(true)}
+                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition flex items-center gap-2 font-semibold"
+                    >
+                        <Plus size={20} /> Create ZTP Endpoint
+                    </button>
+                )}
             </div>
 
             {/* Workflows Table */}

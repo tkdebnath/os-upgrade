@@ -8,7 +8,7 @@ class PostCheckStep(BaseStep):
         job = self.get_job()
         device = job.device
         
-        # 1. Post Checks
+        # Post Checks
         all_checks = job.selected_checks.all()
         if all_checks.exists():
             genie_dev, log_dir = create_genie_device(device, job.id)
@@ -48,7 +48,7 @@ class PostCheckStep(BaseStep):
                 except:
                    pass
 
-            # 2. Diff Generation
+            # Diff Generation
             self.log("Generating Pre/Post Comparison Diffs...")
             generate_diffs(job, all_checks, log_dir)
             self.log("Diff Generation Complete.")

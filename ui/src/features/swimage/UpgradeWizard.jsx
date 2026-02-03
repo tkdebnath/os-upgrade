@@ -24,31 +24,24 @@ const UpgradeWizard = () => {
     }, [user]);
     
     const [step, setStep] = useState(1);
-    const [selectedDevices, setSelectedDevices] = useState(location.state?.selectedDevices || []); // List of IDs if passed, or we fetch details
+    const [selectedDevices, setSelectedDevices] = useState(location.state?.selectedDevices || []);
     const [deviceDetails, setDeviceDetails] = useState([]);
     const [loading, setLoading] = useState(true);
 
-    // Step 2 (New): Workflow Selection
     const [availableWorkflows, setAvailableWorkflows] = useState([]);
     const [selectedWorkflowId, setSelectedWorkflowId] = useState('');
 
-    // Step 3 (Old Step 2) State
     const [readinessResults, setReadinessResults] = useState([]);
     const [checking, setChecking] = useState(false);
 
-    // Step 4 (Old Step 3) State
     const [distributing, setDistributing] = useState(false);
-    const [latestJobs, setLatestJobs] = useState({}); // { deviceId: jobId }
-    const [selectedForNextStep, setSelectedForNextStep] = useState([]); // IDs to proceed
+    const [latestJobs, setLatestJobs] = useState({});
+    const [selectedForNextStep, setSelectedForNextStep] = useState([]);
 
-    // Step 5 (Old Step 4) State
     const [availableChecks, setAvailableChecks] = useState([]);
-    const [checksConfig, setChecksConfig] = useState({}); // { checkId: { pre: true, post: true } }
+    const [checksConfig, setChecksConfig] = useState({});
 
-    // Step 6 (Old Step 5) State
     const [activating, setActivating] = useState(false);
-    // Removed duplicate workflow state here
-    // Step 6 Configuration
     const [scheduleMode, setScheduleMode] = useState(false);
     const [scheduleTime, setScheduleTime] = useState('');
     const [sequentialIds, setSequentialIds] = useState([]);

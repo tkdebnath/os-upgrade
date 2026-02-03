@@ -36,7 +36,7 @@ const GroupManagement = () => {
     };
 
     // Configure axios defaults
-    axios.defaults.baseURL = 'http://localhost:8000';
+    axios.defaults.baseURL = window.location.origin;
     axios.defaults.withCredentials = true;
     axios.defaults.headers.common['X-CSRFToken'] = getCsrfToken();
 
