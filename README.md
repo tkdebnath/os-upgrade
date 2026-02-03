@@ -15,12 +15,24 @@ Network device upgrade automation for Cisco gear. Built this to stop babysitting
 ### Development
 
 ```bash
-# Clone and setup
+# Clone and setup for sqllite
 cp env/app.env.example env/app.env
 # Edit env/app.env with your settings
 
+# Build image
+docker compose build --no-cache
 # Start containers
 docker compose up -d
+
+       or
+
+cp env/app.prod.env.example env/app.prod.env
+# Edit env/app.env with your settings
+
+# Build image
+docker compose build --no-cache
+# Start containers
+docker compose -f docker-compose.prod.yml up -d
 
 # Create admin user
 docker compose exec backend python manage.py createsuperuser
