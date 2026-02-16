@@ -107,7 +107,8 @@ Currently handles:
 To add support for new models, create a strategy in:
 `swim_backend/core/services/workflow/activation_strategies/`
 
-Look at `catalyst9300_strategy.py` as an example.
+Look at `catalyst9300_strategy.py` as an example
+
 
 # Readiness Check
 
