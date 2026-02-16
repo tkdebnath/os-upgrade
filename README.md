@@ -109,6 +109,12 @@ To add support for new models, create a strategy in:
 
 Look at `catalyst9300_strategy.py` as an example.
 
+# Readiness Check
+
+Support for new readiness checks is easy to add. 
+- create a check in:
+`swim_backend/core/services/workflow/readiness_checks/`
+
 ## Tech Stack
 
 - **Backend**: Django + DRF + Celery
