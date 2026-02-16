@@ -4,7 +4,7 @@ from .registry import ReadinessStrategyRegistry
 
 @ReadinessStrategyRegistry.register
 class Catalyst9300ReadinessStrategy(BaseReadinessStrategy):
-    supported_models = ["Catalyst 9300"]
+    supported_models = ["Catalyst 9300", "C9300-48UXM"]
     supported_platforms = ["iosxe"]
 
     def execute(self, dev):

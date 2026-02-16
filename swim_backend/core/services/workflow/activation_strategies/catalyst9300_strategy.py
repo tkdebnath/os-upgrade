@@ -5,7 +5,7 @@ from .registry import ActivationStrategyRegistry
 
 @ActivationStrategyRegistry.register
 class Catalyst9300ActivationStrategy(BaseActivationStrategy):
-    supported_models = ["Catalyst 9300"]
+    supported_models = ["Catalyst 9300", "C9300-48UXM"]
     supported_platforms = ["iosxe"]
 
     def execute(self, genie_device):
