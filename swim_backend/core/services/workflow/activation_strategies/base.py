@@ -13,12 +13,19 @@ class BaseActivationStrategy:
         # Check model match
         if self.supported_models:
             model_name = device.model.name if device.model else None
-            if model_name not in self.supported_models:
+            # Case-insensitive check
+            if model_name:
+                if not any(m.lower() == model_name.lower() for m in self.supported_models):
+                    return False
+            else:
                 return False
         
         # Check platform match
         if self.supported_platforms:
-            if device.platform not in self.supported_platforms:
+            if device.platform:
+                 if not any(p.lower() == device.platform.lower() for p in self.supported_platforms):
+                    return False
+            else:
                 return False
         
         # Check version range (if specified)

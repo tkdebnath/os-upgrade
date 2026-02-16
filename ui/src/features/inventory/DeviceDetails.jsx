@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { ArrowLeft, Server, Activity, ShieldCheck, Clock, Edit } from 'lucide-react';
+import { ArrowLeft, Server, Activity, ShieldCheck, Clock, Edit, RefreshCw, ChevronDown, ChevronUp, AlertCircle } from 'lucide-react';
 import EditDeviceModal from './EditDeviceModal';
 import { useAuth } from '../../context/AuthContext';
 
@@ -13,7 +13,7 @@ const DeviceDetails = () => {
     const [loading, setLoading] = useState(true);
     const [showEditModal, setShowEditModal] = useState(false);
     const [fileServers, setFileServers] = useState([]);
-    
+
     // Permission check helper
     const can = (perm) => {
         if (!user) return false;
@@ -68,8 +68,8 @@ const DeviceDetails = () => {
                 </div>
                 <div className="ml-auto flex space-x-2 items-center">
                     <span className={`px-3 py-1 rounded-full text-xs font-bold ${device.reachability === 'Reachable' ? 'bg-green-100 text-green-700' :
-                            device.reachability === 'Unreachable' ? 'bg-red-100 text-red-700' :
-                                'bg-gray-100 text-gray-500'
+                        device.reachability === 'Unreachable' ? 'bg-red-100 text-red-700' :
+                            'bg-gray-100 text-gray-500'
                         }`}>
                         {device.reachability}
                     </span>
@@ -124,29 +124,27 @@ const DeviceDetails = () => {
                     <div className="space-y-3 text-sm">
                         <div className="flex justify-between border-b border-gray-50 py-2">
                             <span className="text-gray-500">Config Compliance</span>
-                            <span className={`font-medium ${
-                                device.version && device.version !== 'Unknown' ? 'text-green-600' : 'text-gray-400'
-                            }`}>
+                            <span className={`font-medium ${device.version && device.version !== 'Unknown' ? 'text-green-600' : 'text-gray-400'
+                                }`}>
                                 {device.version && device.version !== 'Unknown' ? 'Compliant' : 'Not Synced'}
                             </span>
                         </div>
                         <div className="flex justify-between border-b border-gray-50 py-2">
                             <span className="text-gray-500">Image Compliance</span>
-                            <span className={`font-medium ${
-                                device.compliance_status === 'Compliant' ? 'text-green-600' :
-                                device.compliance_status === 'Ahead' ? 'text-blue-600' :
-                                device.compliance_status === 'Non-Compliant' ? 'text-red-600' :
-                                'text-gray-500'
-                            }`}>
+                            <span className={`font-medium ${device.compliance_status === 'Compliant' ? 'text-green-600' :
+                                    device.compliance_status === 'Ahead' ? 'text-blue-600' :
+                                        device.compliance_status === 'Non-Compliant' ? 'text-red-600' :
+                                            'text-gray-500'
+                                }`}>
                                 {device.compliance_status || 'No Standard'}
                             </span>
                         </div>
                         <div className="flex justify-between border-b border-gray-50 py-2">
                             <span className="text-gray-500">Last Scan</span>
                             <span className="font-medium text-gray-900 flex items-center">
-                                <Clock size={12} className="mr-1" /> 
-                                {device.last_sync_time 
-                                    ? new Date(device.last_sync_time).toLocaleString() 
+                                <Clock size={12} className="mr-1" />
+                                {device.last_sync_time
+                                    ? new Date(device.last_sync_time).toLocaleString()
                                     : 'Never'}
                             </span>
                         </div>
@@ -157,9 +155,8 @@ const DeviceDetails = () => {
             {/* Associated Jobs */}
             <DeviceJobs deviceId={id} />
 
-            <div className="mt-8 bg-blue-50 p-4 rounded text-center text-blue-700 text-sm">
-                Placeholder for more detailed configuration, interfaces, and telemetry history.
-            </div>
+            {/* Sync History */}
+            <SyncHistory deviceId={id} />
 
             {/* Edit Modal */}
             {showEditModal && (
@@ -241,6 +238,126 @@ const DeviceJobs = ({ deviceId }) => {
                     </table>
                 </div>
             )}
+        </div>
+    );
+};
+
+const SyncHistory = ({ deviceId }) => {
+    const [history, setHistory] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [expandedId, setExpandedId] = useState(null);
+
+    useEffect(() => {
+        fetchHistory();
+    }, [deviceId]);
+
+    const fetchHistory = async () => {
+        try {
+            const res = await axios.get(`/api/dcim/devices/${deviceId}/sync_history/`);
+            setHistory(res.data);
+        } catch (error) {
+            console.error("Failed to fetch sync history", error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    if (loading) {
+        return (
+            <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                <div className="flex items-center text-gray-500">
+                    <RefreshCw className="animate-spin mr-2" size={16} />
+                    Loading sync history...
+                </div>
+            </div>
+        );
+    }
+
+    if (history.length === 0) {
+        return (
+            <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                <h3 className="text-sm font-bold text-gray-500 uppercase mb-4 flex items-center">
+                    <RefreshCw className="mr-2" size={16} /> Sync History
+                </h3>
+                <p className="text-gray-500 text-sm">No sync history available.</p>
+            </div>
+        );
+    }
+
+    return (
+        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+            <h3 className="text-sm font-bold text-gray-500 uppercase mb-4 flex items-center">
+                <RefreshCw className="mr-2" size={16} /> Sync History
+            </h3>
+            <div className="space-y-3">
+                {history.map((sync) => (
+                    <div key={sync.id} className="border border-gray-200 rounded-lg overflow-hidden">
+                        <div
+                            className="flex items-center justify-between p-3 cursor-pointer hover:bg-gray-50"
+                            onClick={() => setExpandedId(expandedId === sync.id ? null : sync.id)}
+                        >
+                            <div className="flex items-center space-x-3">
+                                <span className={`w-2 h-2 rounded-full ${sync.status === 'success' ? 'bg-green-500' : 'bg-red-500'}`}></span>
+                                <span className="text-sm font-medium">{new Date(sync.timestamp).toLocaleString()}</span>
+                                <span className={`px-2 py-0.5 rounded text-xs font-bold uppercase ${sync.status === 'success' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                                    }`}>
+                                    {sync.status}
+                                </span>
+                                {sync.version_discovered && (
+                                    <span className="text-xs text-gray-500">v{sync.version_discovered}</span>
+                                )}
+                                {sync.model_discovered && (
+                                    <span className="text-xs text-gray-500">{sync.model_discovered}</span>
+                                )}
+                            </div>
+                            <div className="flex items-center space-x-2">
+                                {Object.keys(sync.changes || {}).length > 0 && (
+                                    <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded">
+                                        {Object.keys(sync.changes).length} change(s)
+                                    </span>
+                                )}
+                                {expandedId === sync.id ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                            </div>
+                        </div>
+
+                        {expandedId === sync.id && (
+                            <div className="p-3 bg-gray-50 border-t border-gray-200">
+                                {sync.status === 'failed' ? (
+                                    <div className="flex items-start text-red-600 text-sm">
+                                        <AlertCircle className="mr-2 mt-0.5 flex-shrink-0" size={16} />
+                                        <span>{sync.error_message}</span>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-2">
+                                        {sync.changes && Object.keys(sync.changes).length > 0 ? (
+                                            <table className="w-full text-sm">
+                                                <thead>
+                                                    <tr className="text-left text-gray-500">
+                                                        <th className="pb-2 font-medium">Field</th>
+                                                        <th className="pb-2 font-medium">Previous Value</th>
+                                                        <th className="pb-2 font-medium">New Value</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {Object.entries(sync.changes).map(([field, change]) => (
+                                                        <tr key={field} className="border-t border-gray-200">
+                                                            <td className="py-2 font-medium capitalize">{field}</td>
+                                                            <td className="py-2 text-red-600">{change.old || '-'}</td>
+                                                            <td className="py-2 text-green-600">{change.new || '-'}</td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        ) : (
+                                            <p className="text-gray-500 text-sm">No changes detected (values remained the same).</p>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                ))}
+            </div>
         </div>
     );
 };

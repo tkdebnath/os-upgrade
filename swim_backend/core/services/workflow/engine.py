@@ -106,11 +106,11 @@ class WorkflowEngine:
                 step_instance = StepClass(self.job_id, step_model.config)
                 
                 # Update UI Progress
-                self.update_job_step(job, step_model.name, "running")
+                self.update_job_step(job, step_model.name, "running", step_model.step_type)
 
                 if not step_instance.can_proceed():
                     log_update(self.job_id, f"Skipping {step_model.name}: Dependencies not met.")
-                    self.update_job_step(job, step_model.name, "skipped")
+                    self.update_job_step(job, step_model.name, "skipped", step_model.step_type)
                     continue
 
                 status, msg = step_instance.execute()
@@ -122,7 +122,7 @@ class WorkflowEngine:
                 log_update(self.job_id, "-"*80)
                 log_update(self.job_id, "")
                 
-                self.update_job_step(job, step_model.name, status)
+                self.update_job_step(job, step_model.name, status, step_model.step_type)
                 
                 if status == 'failed':
                     if step_model.config.get('continue_on_failure'):
@@ -141,7 +141,7 @@ class WorkflowEngine:
                 log_update(self.job_id, f"✗ FAILED STEP: {step_model.name}")
                 log_update(self.job_id, "-"*80)
                 log_update(self.job_id, "")
-                self.update_job_step(job, step_model.name, "failed")
+                self.update_job_step(job, step_model.name, "failed", step_model.step_type)
                 job.status = 'failed'
                 job.save(update_fields=['status'])
                 return
@@ -154,7 +154,7 @@ class WorkflowEngine:
         job.status = 'success' # Or partial?
         job.save(update_fields=['status'])
 
-    def update_job_step(self, job, step_name, status):
+    def update_job_step(self, job, step_name, status, step_type=None):
         # Helper to update the JSON steps field
         # We reload job to be safe
         j = Job.objects.get(id=job.id)
@@ -162,10 +162,13 @@ class WorkflowEngine:
         if existing:
             existing['status'] = status
             existing['timestamp'] = timezone.now().strftime("%H:%M:%S")
+            if step_type and not existing.get('step_type'):
+                existing['step_type'] = step_type
         else:
             j.steps.append({
                 'name': step_name,
                 'status': status,
-                'timestamp': timezone.now().strftime("%H:%M:%S")
+                'timestamp': timezone.now().strftime("%H:%M:%S"),
+                'step_type': step_type
             })
         j.save(update_fields=['steps'])

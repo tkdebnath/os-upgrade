@@ -30,8 +30,6 @@ const ValidationSettings = () => {
     };
 
     const handleDelete = async (id) => {
-        // Simple direct delete without native confirm to avoid browser blocking issues
-        // In production use a custom modal
         try {
             await axios.delete(`/api/core/checks/${id}/`);
             setChecks(checks.filter(c => c.id !== id));

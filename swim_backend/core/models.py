@@ -112,6 +112,8 @@ class Job(models.Model):
     # Detailed Progress tracking
     steps = models.JSONField(default=list, blank=True) # [{'name': 'MD5', 'status': 'success', 'timestamp': '...'}, ...]
     created_by = models.ForeignKey('auth.User', on_delete=models.SET_NULL, null=True, blank=True)
+    
+    remarks = models.TextField(blank=True, null=True, help_text="RFC number or comments")
 
     log = models.TextField(blank=True, default='')
     created_at = models.DateTimeField(auto_now_add=True)

@@ -9,11 +9,12 @@ class WaitStep(BaseStep):
     """
     
     def execute(self):
-        duration = int(self.config.get('duration', 30))
+        duration_val = self.config.get('duration')
+        if duration_val is None:
+            duration_val = 30
+        duration = int(duration_val)
         self.log(f"Waiting for {duration} seconds...")
         
-        # In a real async engine (Celery), this should be a retry/countdown.
-        # Thread-based implementation uses sleep.
         time.sleep(duration)
         
         self.log("Wait complete.")

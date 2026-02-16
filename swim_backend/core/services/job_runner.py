@@ -14,47 +14,69 @@ logger = logging.getLogger(__name__)
 # Global Semaphore for Concurrency Limits (Kept for backward compatibility or direct use)
 DISTRIBUTION_SEMAPHORE = threading.Semaphore(40)
 
-def update_step(job_id, step_name, status='pending'):
+
+def update_step(job_id, step_name, status="pending"):
     """
     Legacy helper kept for backward compatibility if other modules use it.
     New WorkflowEngine uses its own update_job_step but logic is similar.
     """
     try:
         job = Job.objects.get(id=job_id)
-        existing = next((s for s in job.steps if s['name'] == step_name), None)
+        existing = next((s for s in job.steps if s["name"] == step_name), None)
         if existing:
-            existing['status'] = status
-            existing['timestamp'] = timezone.now().strftime("%H:%M:%S")
+            existing["status"] = status
+            existing["timestamp"] = timezone.now().strftime("%H:%M:%S")
         else:
-            job.steps.append({
-                'name': step_name,
-                'status': status,
-                'timestamp': timezone.now().strftime("%H:%M:%S")
-            })
+            job.steps.append(
+                {
+                    "name": step_name,
+                    "status": status,
+                    "timestamp": timezone.now().strftime("%H:%M:%S"),
+                }
+            )
         job.save()
     except:
         pass
+
 
 def run_swim_job(job_id):
     """
     Refactored Entry point using Modular Workflow Engine.
     """
     try:
+        from django.conf import settings
+
+        job = Job.objects.get(id=job_id)
+        device = job.device
+
+        model_name = device.model.name if device.model else None
+        if model_name and model_name not in settings.SUPPORTED_DEVICE_MODELS:
+            job.status = "failed"
+            job.save()
+            log_update(
+                job_id,
+                f"Job failed: Device model {model_name} is not in supported models list",
+            )
+            return
+
         from .workflow.engine import WorkflowEngine
+
         engine = WorkflowEngine(job_id)
         engine.run()
     except Exception as e:
         logger.error(f"Job {job_id} failed: {e}")
         try:
-             # Ensure failure is visible in UI
-             from .diff_service import log_update
-             log_update(job_id, f"Critical System Error: {e}")
-             
-             job = Job.objects.get(id=job_id)
-             job.status = 'failed'
-             job.save()
+            # Ensure failure is visible in UI
+            from .diff_service import log_update
+
+            log_update(job_id, f"Critical System Error: {e}")
+
+            job = Job.objects.get(id=job_id)
+            job.status = "failed"
+            job.save()
         except:
-             pass
+            pass
+
 
 def run_sequential_batch(job_ids):
     """
@@ -62,17 +84,18 @@ def run_sequential_batch(job_ids):
     """
     for job_id in job_ids:
         try:
-             # Run job synchronously in this thread
-             # Check if cancelled before starting next
-             job = Job.objects.get(id=job_id)
-             if job.status == 'cancelled':
-                 log_update(job_id, "Sequential Job Cancelled before start.")
-                 continue
+            # Run job synchronously in this thread
+            # Check if cancelled before starting next
+            job = Job.objects.get(id=job_id)
+            if job.status == "cancelled":
+                log_update(job_id, "Sequential Job Cancelled before start.")
+                continue
 
-             log_update(job_id, "Starting Sequential Execution...")
-             run_swim_job(job_id)
+            log_update(job_id, "Starting Sequential Execution...")
+            run_swim_job(job_id)
         except Exception as e:
-             log_update(job_id, f"Sequential Batch Error: {e}")
+            log_update(job_id, f"Sequential Batch Error: {e}")
+
 
 def orchestrate_jobs(sequential_ids, parallel_ids, schedule_time=None):
     """
@@ -81,11 +104,11 @@ def orchestrate_jobs(sequential_ids, parallel_ids, schedule_time=None):
     2. Runs sequential_ids one by one.
     3. Runs parallel_ids concurrently.
     """
-    
+
     # Update status to 'scheduled' initially
     all_ids = sequential_ids + parallel_ids
-    Job.objects.filter(id__in=all_ids).update(status='scheduled')
-    
+    Job.objects.filter(id__in=all_ids).update(status="scheduled")
+
     # Wait for schedule
     if schedule_time:
         try:
@@ -94,7 +117,7 @@ def orchestrate_jobs(sequential_ids, parallel_ids, schedule_time=None):
                 target_time = date_parser.parse(schedule_time)
             else:
                 target_time = schedule_time
-            
+
             # Ensure target_time is aware if simple parser gave naive
             if timezone.is_naive(target_time):
                 target_time = timezone.make_aware(target_time)
@@ -105,7 +128,7 @@ def orchestrate_jobs(sequential_ids, parallel_ids, schedule_time=None):
                 logger.info(f"Scheduling execution for {target_time} (in {delay}s)")
                 for jid in all_ids:
                     log_update(jid, f"Scheduled for execution at {target_time}")
-                
+
                 time.sleep(delay)
         except Exception as e:
             logger.error(f"Scheduling Error: {e}")

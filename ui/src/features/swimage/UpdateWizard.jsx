@@ -48,8 +48,6 @@ const ImageUpdateWizard = ({ selectedDevices, onClose, onSuccess }) => {
     const handleSubmit = async () => {
         setLoading(true);
         try {
-            // In a real app, we'd batch create jobs or create a parent 'Workflow' object
-            // Here we iterate and create a job for each device
             const promises = selectedDevices.map(device => {
                 return axios.post('/api/core/jobs/', {
                     device: device.id,

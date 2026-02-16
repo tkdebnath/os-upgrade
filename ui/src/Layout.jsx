@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { NavLink, Outlet, Link, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Server, Activity, Settings, List, HardDrive, Lock, Shield, Calendar, Map, LogOut, UserCog, User, Zap } from 'lucide-react';
+import { LayoutDashboard, Server, Activity, Settings, List, HardDrive, Lock, Shield, Calendar, Map, LogOut, UserCog, User, Zap, ShieldCheck, Clock, AlertTriangle } from 'lucide-react';
 import axios from 'axios';
 import { useAuth } from './context/AuthContext';
 
@@ -23,6 +23,8 @@ const Layout = () => {
     const { user: authUser, logout } = useAuth();
     const navigate = useNavigate();
     const [user, setUser] = useState({ permissions: [], is_superuser: false, username: 'Loading...' });
+    const [currentTime, setCurrentTime] = useState(new Date());
+    const [schedulerHealthy, setSchedulerHealthy] = useState(true);
 
     useEffect(() => {
         if (authUser) {
@@ -30,13 +32,31 @@ const Layout = () => {
         }
     }, [authUser]);
 
+    useEffect(() => {
+        const timer = setInterval(() => setCurrentTime(new Date()), 1000);
+        return () => clearInterval(timer);
+    }, []);
+
+    useEffect(() => {
+        const checkSystemStatus = async () => {
+            try {
+                const res = await axios.get('/api/core/system-status/');
+                setSchedulerHealthy(res.data?.scheduler?.healthy ?? true);
+            } catch {
+                // If the endpoint fails, assume unhealthy
+                setSchedulerHealthy(false);
+            }
+        };
+        checkSystemStatus();
+        const interval = setInterval(checkSystemStatus, 60000);
+        return () => clearInterval(interval);
+    }, []);
+
     const handleLogout = async () => {
         await logout();
         navigate('/login');
     };
 
-    // Helper to check permission
-    // In real app, check specific permissions like 'devices.view_device'
     const can = (perm) => user.is_superuser || (user.permissions && user.permissions.includes(perm));
 
     return (
@@ -87,7 +107,10 @@ const Layout = () => {
                     <div className="pt-6">
                         <p className="px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">System</p>
                         {user.is_superuser && (
-                            <SidebarItem to="/admin" icon={UserCog} label="Admin Panel" />
+                            <>
+                                <SidebarItem to="/admin" icon={UserCog} label="Admin Panel" />
+                                <SidebarItem to="/supported-models" icon={ShieldCheck} label="Supported Models" />
+                            </>
                         )}
                         <SidebarItem to="/profile" icon={User} label="My Profile" />
                         {user.is_superuser && (
@@ -109,6 +132,16 @@ const Layout = () => {
                 {/* Header */}
                 <header className="h-16 bg-white shadow-sm flex items-center justify-between px-8 z-10">
                     <h2 className="text-xl font-semibold text-gray-800">Cisco Switch OS Upgrade</h2>
+                    <div className="flex items-center space-x-2 text-gray-500 text-sm">
+                        <Clock size={15} className="text-blue-500" />
+                        <span className="font-medium">
+                            {currentTime.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
+                        </span>
+                        <span className="text-gray-300">|</span>
+                        <span className="font-mono text-gray-600">
+                            {currentTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', timeZoneName: 'short' })}
+                        </span>
+                    </div>
                     <div className="flex items-center space-x-4">
                         {/* Status Badge */}
                         {user.is_superuser && (
@@ -116,10 +149,16 @@ const Layout = () => {
                                 <Lock size={12} className="mr-1" /> Admin Mode
                             </span>
                         )}
-                        <span className="px-3 py-1 bg-green-100 text-green-700 text-xs font-medium rounded-full border border-green-200">
-                            System Operational
-                        </span>
-                        
+                        {schedulerHealthy ? (
+                            <span className="px-3 py-1 bg-green-100 text-green-700 text-xs font-medium rounded-full border border-green-200">
+                                System Operational
+                            </span>
+                        ) : (
+                            <span className="px-3 py-1 bg-amber-100 text-amber-700 text-xs font-medium rounded-full border border-amber-300 flex items-center animate-pulse">
+                                <AlertTriangle size={12} className="mr-1" /> Scheduler Offline
+                            </span>
+                        )}
+
                         {/* User Info */}
                         <div className="flex items-center space-x-3 pl-4 border-l border-gray-200">
                             <Link to="/profile" className="flex items-center space-x-2 hover:opacity-80 transition-opacity">
@@ -147,6 +186,43 @@ const Layout = () => {
                 <main className="flex-1 overflow-auto p-8">
                     <Outlet />
                 </main>
+
+                {/* Footer */}
+                <footer className="bg-white border-t border-gray-200 px-8 py-4">
+                    <div className="flex items-center justify-between text-sm text-gray-500">
+                        <div>
+                            <span>SWIM - Cisco OS Upgrade Management</span>
+                        </div>
+                        <div className="flex items-center space-x-4">
+                            <a
+                                href="/api/schema/swagger-ui/"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="hover:text-blue-600 transition-colors"
+                            >
+                                Swagger UI
+                            </a>
+                            <span className="text-gray-300">|</span>
+                            <a
+                                href="/api/schema/redoc/"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="hover:text-blue-600 transition-colors"
+                            >
+                                ReDoc
+                            </a>
+                            <span className="text-gray-300">|</span>
+                            <a
+                                href="/api/schema/"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="hover:text-blue-600 transition-colors"
+                            >
+                                OpenAPI Schema
+                            </a>
+                        </div>
+                    </div>
+                </footer>
             </div>
         </div>
     );

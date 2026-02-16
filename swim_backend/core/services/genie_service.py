@@ -5,9 +5,7 @@ from django.utils import timezone
 
 logger = logging.getLogger(__name__)
 
-# Mock Genie if not available
 try:
-    # from genie.testbed import Testbed  <-- Removed to avoid ImportError
     from genie.conf.base.device import Device as GenieDevice
 except ImportError:
     class GenieDevice:
@@ -45,12 +43,10 @@ def create_genie_device(device, job_id_or_path):
             if not password: password = global_creds.password
             if not secret and global_creds.secret: secret = global_creds.secret
     
-    # Sanity check - shouldn't hit this if DB is configured right
     if not username or not password:
         logger.warning(f"No credentials found for device {device.hostname} (and no global fallback).")
 
     try:
-        # Build testbed config dictionary (pyATS format)
         device_conf = {
             'os': device.platform if device.platform else 'iosxe',
             'type': device.family.lower() if hasattr(device, 'family') else 'switch',
@@ -81,15 +77,11 @@ def create_genie_device(device, job_id_or_path):
         return dev, dir_path
 
     except ImportError:
-        # Fallback for environment without Genie installed
         logger.warning("Genie not installed. Returning Mock Device.")
         return GenieDevice(name=device.hostname), dir_path
     except ImportError:
-        # Fallback for environment without Genie installed
         logger.warning("Genie not installed. Returning Mock Device.")
         return GenieDevice(name=device.hostname), dir_path
-    # Removed generic Exception catch to allow real connection errors to propagate
-
 
 
 def run_check_operation(device_obj, check_type, command, check_name, phase, output_dir, timeout=300):

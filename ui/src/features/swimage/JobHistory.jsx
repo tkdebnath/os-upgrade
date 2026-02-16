@@ -189,11 +189,6 @@ const Jobs = () => {
                         {selectedJobIds.length > 0 ? (
                             <button
                                 onClick={() => {
-                                    /* Since we don't have bulk cancel logic in this component yet (it was in ScheduledJobs), we need to implement it or just rely on row actions. 
-                                       Actually, the user asked for bulk cancel in general. I should add it here too if possible, OR just keep it simple.
-                                       Let's add a placeholder or simple loop cancel here if needed, but for now just the "Cancel (N)" button.
-                                       Wait, the previous edit tried to add it. Let's add it properly.
-                                    */
                                     if (confirm(`Cancel ${selectedJobIds.length} jobs?`)) {
                                         Promise.all(selectedJobIds.map(id => axios.post(`/api/core/jobs/${id}/cancel/`)))
                                             .then(() => fetchJobs());
@@ -232,7 +227,7 @@ const Jobs = () => {
                                 <th className="p-4 w-20">ID</th>
                                 <th className="p-4">Device</th>
                                 <th className="p-4">Task Name</th>
-                                <th className="p-4">Type</th>
+                                <th className="p-4">Remarks</th>
                                 <th className="p-4">Status</th>
                                 <th className="p-4">Started At</th>
                                 <th className="p-4 text-right">Actions</th>
@@ -264,7 +259,7 @@ const Jobs = () => {
                                         </td>
                                         <td className="p-4 font-medium text-gray-800">{job.device_hostname || job.device}</td>
                                         <td className="p-4 text-gray-600">{job.task_name || 'N/A'}</td>
-                                        <td className="p-4 text-gray-500">Upgrade</td>
+                                        <td className="p-4 text-gray-500 italic">{job.remarks || '-'}</td>
                                         <td className="p-4">
                                             {renderStatus(job.status)}
                                         </td>

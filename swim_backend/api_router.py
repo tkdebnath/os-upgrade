@@ -27,6 +27,19 @@ from swim_backend.core.reports import ReportViewSet
 
 
 # ============================================================================
+# System Status View
+# ============================================================================
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def system_status(request, format=None):
+    """System health status including scheduler"""
+    from swim_backend.core.scheduler import get_scheduler_status
+    return Response({
+        'scheduler': get_scheduler_status(),
+    })
+
+
+# ============================================================================
 # API Root View - NetBox Style
 # ============================================================================
 @api_view(['GET'])
@@ -171,6 +184,7 @@ urlpatterns = [
     
     path('core/', core_api_root, name='core-api-root'),
     path('core/', include(core_router.urls)),
+    path('core/system-status/', system_status, name='system-status'),
     
     path('users/', users_api_root, name='users-api-root'),
     path('users/', include(users_router.urls)),

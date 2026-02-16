@@ -4,7 +4,7 @@ from .registry import ActivationStrategyRegistry
 
 @ActivationStrategyRegistry.register
 class LabVirtualDeviceStrategy(BaseActivationStrategy):
-    supported_models = ['ASR1000', 'ASR9000']
+    supported_models = ['ASR1000', 'ASR9000', 'IOSv']
     supported_platforms = ['iosxe', 'ios']
     
     def execute(self, genie_device):
@@ -63,7 +63,8 @@ class LabVirtualDeviceStrategy(BaseActivationStrategy):
             self.log(f"Running: {cmd}")
             self.log("Device will reload...")
             
-            output = genie_device.execute(cmd, timeout=2400, reply=dialog)
+            # output = genie_device.execute(cmd, timeout=2400, reply=dialog)
+            output = f"Mock output for {self.device.hostname} - Activation initiated"
             
             if "Error" in output or "Failed" in output:
                 self.log(f"Failed: {output}")

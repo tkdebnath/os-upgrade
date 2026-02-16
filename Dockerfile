@@ -14,7 +14,17 @@ RUN apt-get update && apt-get install -y \
     libsasl2-dev \
     libssl-dev \
     iputils-ping \
+    openssh-client \
     && rm -rf /var/lib/apt/lists/*
+
+# Configure SSH to support older Cisco devices
+RUN mkdir -p /root/.ssh && \
+    cat > /root/.ssh/config << 'EOF'
+Host *
+KexAlgorithms diffie-hellman-group-exchange-sha1,diffie-hellman-group14-sha1,diffie-hellman-group1-sha1
+Ciphers aes256-ctr,aes192-ctr,aes128-ctr
+HostKeyAlgorithms +ssh-rsa
+EOF
 
 # Set work directory
 WORKDIR /app
@@ -39,14 +49,10 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD python -c "import requests; requests.get('http://localhost:8000/', timeout=5)" || exit 1
 
-# Collect static files and run migrations on startup
-CMD python manage.py collectstatic --noinput && \
-    python manage.py migrate --noinput && \
-    gunicorn swim_backend.wsgi:application \
-        --bind 0.0.0.0:8000 \
-        --workers 4 \
-        --threads 2 \
-        --timeout 120 \
-        --access-logfile - \
-        --error-logfile - \
-        --log-level info
+# Copy entrypoint
+COPY entrypoint.sh ./
+RUN chmod +x entrypoint.sh
+
+# Collect static files and run migrations on startup via entrypoint
+ENTRYPOINT ["./entrypoint.sh"]
+

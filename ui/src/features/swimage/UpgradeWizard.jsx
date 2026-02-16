@@ -8,13 +8,13 @@ const UpgradeWizard = () => {
     const location = useLocation();
     const navigate = useNavigate();
     const { user } = useAuth();
-    
+
     // Permission check
     const can = (perm) => {
         if (!user) return false;
         return user.is_superuser || (user.permissions && user.permissions.includes(perm));
     };
-    
+
     // Check permission on mount
     useEffect(() => {
         if (user && !can('devices.upgrade_device_firmware')) {
@@ -22,7 +22,7 @@ const UpgradeWizard = () => {
             navigate('/devices');
         }
     }, [user]);
-    
+
     const [step, setStep] = useState(1);
     const [selectedDevices, setSelectedDevices] = useState(location.state?.selectedDevices || []);
     const [deviceDetails, setDeviceDetails] = useState([]);
@@ -47,6 +47,8 @@ const UpgradeWizard = () => {
     const [sequentialIds, setSequentialIds] = useState([]);
     const [parallelIds, setParallelIds] = useState([]);
     const [createdJobIds, setCreatedJobIds] = useState([]);
+    const [remarks, setRemarks] = useState('');
+    const [deviceRemarks, setDeviceRemarks] = useState({}); // { deviceId: "remark" }
 
     // Step 4: Image Selection
     const [imageSelection, setImageSelection] = useState({}); // { deviceId: imageId }
@@ -97,9 +99,6 @@ const UpgradeWizard = () => {
 
     const fetchDeviceDetails = async () => {
         try {
-            // In a real app we might pass full objects, but let's re-fetch to be safe
-            // Or use a filtered list endpoint. For now, we will mock or filter locally if we had full list context.
-            // Let's assume we can fetch by IDs or just fetch all and filter (inefficient but works for Prototype)
             const res = await axios.get('/api/dcim/devices/');
             const allDevs = res.data.results || res.data;
             const targetDevs = allDevs.filter(d => selectedDevices.includes(d.id));
@@ -114,7 +113,7 @@ const UpgradeWizard = () => {
     const runChecks = async () => {
         setChecking(true);
         try {
-            const res = await axios.post('/api/dcim/devices/check_readiness/', { 
+            const res = await axios.post('/api/dcim/devices/check_readiness/', {
                 ids: selectedDevices,
                 image_map: imageSelection
             });
@@ -673,51 +672,117 @@ const UpgradeWizard = () => {
                     </div>
                     <div className="p-8 space-y-8">
                         {/* Upper: Summary and Scheduling */}
-                        <div className="flex justify-between items-start">
-                            <div className="max-w-md bg-blue-50 border border-blue-100 p-4 rounded text-left">
-                                <h3 className="font-bold text-blue-800 mb-2">Configuration Summary</h3>
-                                <ul className="text-sm text-blue-700 space-y-1 ml-4 list-disc">
-                                    <li><strong>Devices:</strong> {selectedDevices.length} selected</li>
-                                    <li><strong>Workflow:</strong> {availableWorkflows.find(w => w.id === parseInt(selectedWorkflowId))?.name || 'Default Legacy'}</li>
-                                    <li><strong>Pre-Checks:</strong> {Object.values(checksConfig).filter(c => c.pre).length} enabled</li>
-                                    <li><strong>Post-Checks:</strong> {Object.values(checksConfig).filter(c => c.post).length} enabled</li>
-                                    <li><strong>Reboot:</strong> Automatic after activation</li>
-                                </ul>
-                            </div>
+                        <div className="flex flex-col space-y-6">
+                            <div className="flex justify-between items-start">
+                                <div className="w-2/3 pr-4">
+                                    <h3 className="font-bold text-gray-800 mb-4 border-b pb-2">Configuration Summary</h3>
+                                    <div className="bg-blue-50 border border-blue-100 p-4 rounded text-left mb-6">
+                                        <ul className="text-sm text-blue-700 space-y-1 ml-4 list-disc grid grid-cols-2 gap-x-4">
+                                            <li><strong>Devices:</strong> {selectedDevices.length} selected</li>
+                                            <li><strong>Workflow:</strong> {availableWorkflows.find(w => w.id === parseInt(selectedWorkflowId))?.name || 'Default Legacy'}</li>
+                                            <li><strong>Pre-Checks:</strong> {Object.values(checksConfig).filter(c => c.pre).length} enabled</li>
+                                            <li><strong>Post-Checks:</strong> {Object.values(checksConfig).filter(c => c.post).length} enabled</li>
+                                            <li><strong>Reboot:</strong> Automatic after activation</li>
+                                        </ul>
+                                    </div>
 
-                            <div className="bg-white border rounded p-4 w-1/3">
-                                <h3 className="font-bold text-gray-700 mb-4 text-sm uppercase">Execution Schedule</h3>
-                                <div className="space-y-3">
-                                    <label className="flex items-center space-x-2 cursor-pointer">
-                                        <input
-                                            type="radio"
-                                            name="schedule"
-                                            checked={!scheduleMode}
-                                            onChange={() => setScheduleMode(false)}
-                                            className="text-blue-600"
-                                        />
-                                        <span className="text-sm font-medium text-gray-700">Kick Off Now</span>
-                                    </label>
-                                    <label className="flex items-center space-x-2 cursor-pointer">
-                                        <input
-                                            type="radio"
-                                            name="schedule"
-                                            checked={scheduleMode}
-                                            onChange={() => setScheduleMode(true)}
-                                            className="text-blue-600"
-                                        />
-                                        <span className="text-sm font-medium text-gray-700">Schedule Maintenance Window</span>
-                                    </label>
+                                    {/* Remarks Section */}
+                                    <div className="bg-gray-50 border border-gray-200 rounded p-4">
+                                        <h4 className="font-bold text-gray-700 text-sm mb-3">Remarks / RFC Tracking</h4>
 
-                                    {scheduleMode && (
-                                        <input
-                                            type="datetime-local"
-                                            value={scheduleTime}
-                                            onChange={(e) => setScheduleTime(e.target.value)}
-                                            className="w-full border rounded p-2 text-sm mt-2"
-                                            min={new Date().toISOString().slice(0, 16)}
-                                        />
-                                    )}
+                                        {/* Common Apply */}
+                                        <div className="flex items-end space-x-2 mb-4">
+                                            <div className="flex-1">
+                                                <label className="block text-xs font-medium text-gray-500 mb-1">Common Remark (Apply to All)</label>
+                                                <input
+                                                    type="text"
+                                                    value={remarks}
+                                                    onChange={(e) => setRemarks(e.target.value)}
+                                                    className="w-full p-2 border border-gray-300 rounded focus:ring-blue-500 focus:border-blue-500 text-sm"
+                                                    placeholder="e.g. RFC-12345: Standard Upgrade"
+                                                />
+                                            </div>
+                                            <button
+                                                onClick={() => {
+                                                    const newRemarks = {};
+                                                    selectedDevices.forEach(id => {
+                                                        newRemarks[id] = remarks;
+                                                    });
+                                                    setDeviceRemarks(newRemarks);
+                                                }}
+                                                className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded text-sm font-medium transition-colors"
+                                            >
+                                                Apply to All
+                                            </button>
+                                        </div>
+
+                                        {/* Per-Device List */}
+                                        <div className="border border-gray-200 rounded max-h-60 overflow-y-auto bg-white">
+                                            <table className="w-full text-left text-xs">
+                                                <thead className="bg-gray-100 font-semibold text-gray-600 sticky top-0">
+                                                    <tr>
+                                                        <th className="p-2 border-b">Device</th>
+                                                        <th className="p-2 border-b">Specific Remark</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-gray-100">
+                                                    {selectedDevices.map(id => {
+                                                        const dev = deviceDetails.find(d => d.id === id);
+                                                        return (
+                                                            <tr key={id} className="hover:bg-gray-50">
+                                                                <td className="p-2 font-medium text-gray-700">{dev?.hostname || id}</td>
+                                                                <td className="p-2">
+                                                                    <input
+                                                                        type="text"
+                                                                        value={deviceRemarks[id] || ''}
+                                                                        onChange={(e) => setDeviceRemarks({ ...deviceRemarks, [id]: e.target.value })}
+                                                                        className="w-full p-1.5 border border-gray-300 rounded text-xs focus:ring-blue-500 focus:border-blue-500"
+                                                                        placeholder="Specific comment..."
+                                                                    />
+                                                                </td>
+                                                            </tr>
+                                                        );
+                                                    })}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="w-1/3 bg-white border rounded p-4">
+                                    <h3 className="font-bold text-gray-700 mb-4 text-sm uppercase">Execution Schedule</h3>
+                                    <div className="space-y-3">
+                                        <label className="flex items-center space-x-2 cursor-pointer">
+                                            <input
+                                                type="radio"
+                                                name="schedule"
+                                                checked={!scheduleMode}
+                                                onChange={() => setScheduleMode(false)}
+                                                className="text-blue-600"
+                                            />
+                                            <span className="text-sm font-medium text-gray-700">Kick Off Now</span>
+                                        </label>
+                                        <label className="flex items-center space-x-2 cursor-pointer">
+                                            <input
+                                                type="radio"
+                                                name="schedule"
+                                                checked={scheduleMode}
+                                                onChange={() => setScheduleMode(true)}
+                                                className="text-blue-600"
+                                            />
+                                            <span className="text-sm font-medium text-gray-700">Schedule Maintenance Window</span>
+                                        </label>
+
+                                        {scheduleMode && (
+                                            <input
+                                                type="datetime-local"
+                                                value={scheduleTime}
+                                                onChange={(e) => setScheduleTime(e.target.value)}
+                                                className="w-full border rounded p-2 text-sm mt-2"
+                                                min={new Date().toISOString().slice(0, 16)}
+                                            />
+                                        )}
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -902,16 +967,16 @@ const UpgradeWizard = () => {
                                                 post: checksConfig[id].post
                                             })).filter(c => c.pre || c.post);
 
-                                            const res = await axios.post('/api/dcim/devices/activate_image/', {
-                                                ids: selectedDevices,
+                                            const res = await axios.post('/api/upgrade/trigger/', {
+                                                devices: selectedDevices,
                                                 checks: checksPayload,
                                                 schedule_time: scheduleMode ? scheduleTime : null,
-                                                execution_config: {
-                                                    sequential: sequentialIds,
-                                                    parallel: parallelIds
-                                                },
+                                                execution_mode: sequentialIds.length > 0 ? 'sequential' : 'parallel',
+                                                image_id: null, // Auto-select handled by defaults
                                                 workflow_id: selectedWorkflowId,
-                                                image_map: imageSelection
+                                                auto_select_image: true,
+                                                remarks: remarks,
+                                                device_remarks: deviceRemarks
                                             });
 
                                             setCreatedJobIds(res.data.job_ids || []);

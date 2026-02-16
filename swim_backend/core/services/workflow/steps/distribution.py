@@ -93,63 +93,41 @@ class DeviceFileDownloader:
         return False
 
     def get_file_size(self, filename, destination='flash:'):
+        """Get file size in bytes from device storage."""
         try:
-            # Command: dir flash:filename
-            # Output example: "   33554432 Jan 01 2024 12:00:00 filename.bin"
             cmd = f"dir {destination}{filename}"
             output = self.device.execute(cmd)
             
-            # Pattern: size in bytes followed by date/time and filename
-            # Adjust regex based on common IOS format
-            # Example line: "  123456  -rw-   ..." or "  123456  Jul 1 2024 ..."
-            # Basic fallback: look for the number before the filename?
-            # Or use 'dir' summary?
-            # Try matching a large number before permission flags or date
-            
-            # Simple approach: Check if "No such file" or similar
+            # Standard IOS/XE dir output:
+            # "... 123456  MMM dd yyyy HH:MM:SS ... filename"
+            # We look for the size (digits) preceding similar data or just the largest number on the line
             if "No such file" in output or "Error opening" in output:
                 return None
-                
-            # Try to find file entry
-            # Pattern: <size> <date> <time> <filename>
+
             match = re.search(r'\s+(\d+)\s+\w{3}\s+\d+', output)
             if match:
                 return int(match.group(1))
-                
-            # Fallback check
-            if filename in output:
-                 # Try to extract the first large number
-                 nums = re.findall(r'(\d+)', output)
-                 # Filter mostly likely candidates (e.g. > 1000)
-                 candidates = [int(n) for n in nums if int(n) > 1000]
-                 if candidates:
-                     return candidates[0] # Best guess
             
             return None
-        except Exception as e:
-            self.log(f"Error checking file size: {e}")
+        except Exception:
             return None
 
     def verify_file_md5(self, filename, expected_md5, destination='flash:'):
+        """Verify file MD5 checksum."""
+        if not expected_md5:
+            return True
+
+        self.log(f"Verifying MD5 for {filename}...")
         try:
-            self.log(f"Calculating MD5 for {filename}...")
-            # Command: verify /md5 flash:filename
-            cmd = f"verify /md5 {destination}{filename}"
+            cmd = f"verify /md5 {destination}{filename} {expected_md5}"
+            # 10 min timeout for large images and slow devices
+            output = self.device.execute(cmd, timeout=600)
             
-            # This can take time, increase timeout
-            output = self.device.execute(cmd, timeout=300)
+            if "Verified" in output:
+                self.log(f"MD5 Verified: {expected_md5}")
+                return True
             
-            # Output contains: "Result = <md5>" or " = <md5>"
-            # Expected MD5 might be in output if valid
-            
-            # Clean output and extract hex string
-            # Look for 32 hex chars
-            found_md5s = re.findall(r'[0-9a-fA-F]{32}', output)
-            
-            for md5 in found_md5s:
-                if md5.lower() == expected_md5.lower():
-                    return True
-            
+            self.log(f"MD5 Verification Failed. Output: {output}")
             return False
             
         except Exception as e:
@@ -247,52 +225,7 @@ class DeviceFileDownloader:
                 return self._check_flash_for_file(filename, destination)
             return False
 
-    def verify_file_md5(self, filename, expected_md5, destination='flash:'):
-        if not expected_md5:
-            self.log("Warning: No MD5 provided. Skipping verification.")
-            return True
-            
-        self.log("Verifying MD5 checksum...")
-        self.log(f"Expected: {expected_md5}")
-        self.log("This may take a while for large files...")
-        
-        try:
-            # The verify command can take a long time for large files
-            # Syntax: verify /md5 flash:filename <expected_md5>
-            cmd = f"verify /md5 {destination}{filename} {expected_md5}"
-            
-            # Use a large timeout (e.g., 10 minutes) to prevent session drop
-            # resulting from long calculation time
-            output = self.device.execute(cmd, timeout=600)
-            
-            # Check output for success
-            # Typical success: "Verified (flash:filename) = <md5>"
-            # Failure output contains "Submitted signature = <md5>" but NOT "Verified"
-            if "Verified" in output and expected_md5 in output:
-                self.log("MD5 Verification Successful!")
-                return True
-            else:
-                self.log("MD5 Verification FAILED!")
-                self.log(f"Output: {output}")
-                return False
-                
-        except Exception as e:
-            self.log(f"Verification error: {e}")
-            return False
 
-    def get_file_size(self, filename, destination='flash:'):
-        try:
-            cmd = f"dir {destination}{filename}"
-            output = self.device.execute(cmd)
-            
-            # Regex to match size in dir output
-            # Example: "  267  -rw-   107412732  Jan 28 2026 12:00:00 +00:00  filename"
-            match = re.search(r'\s+(\d+)\s+\w{3}\s+\d+', output)
-            if match:
-                return int(match.group(1))
-        except Exception:
-            pass
-        return None
 
     def _monitor_progress(self):
         monitor_device = None

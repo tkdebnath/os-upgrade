@@ -16,6 +16,10 @@ const ZTPManagement = () => {
     const [loading, setLoading] = useState(true);
     const [showCreateModal, setShowCreateModal] = useState(false);
 
+    // Token Modal State
+    const [tokenData, setTokenData] = useState(null);
+
+
     // Form state
     const [formData, setFormData] = useState({
         name: '',
@@ -85,7 +89,9 @@ const ZTPManagement = () => {
     const handleDiscover = async (id) => {
         try {
             const res = await axios.get(`/api/core/ztp-workflows/${id}/stats/`);
-            alert(`Webhook URL: ${res.data.webhook_url}\nWebhook Token: ${res.data.webhook_token}\n\nDevices provisioned: ${res.data.total_devices}`);
+            // Security: Mask the token in state to prevent exposure via React DevTools
+            const secureData = { ...res.data, webhook_token: '********************************' };
+            setTokenData(secureData);
         } catch (error) {
             console.error('Error getting stats:', error);
             alert('Failed to get workflow stats');
@@ -153,7 +159,7 @@ const ZTPManagement = () => {
                     <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
                         <Zap className="text-blue-600" /> Zero Touch Provisioning
                     </h1>
-                <p className="text-gray-600 mt-1">Auto-discover devices, check IOS compliance, and upgrade to golden image</p>
+                    <p className="text-gray-600 mt-1">Auto-discover devices, check IOS compliance, and upgrade to golden image</p>
                 </div>
                 {(can('core.can_manage_ztp') || user?.is_superuser) && (
                     <button
@@ -195,7 +201,7 @@ const ZTPManagement = () => {
                                             {wf.device_family_filter && <div>Family: {wf.device_family_filter}</div>}
                                             {wf.platform_filter && <div>Platform: {wf.platform_filter}</div>}
                                             {wf.model_name && <div>Model: {wf.model_name}</div>}
-                                            {!wf.target_site_name && !wf.device_family_filter && !wf.platform_filter && !wf.model_name && 
+                                            {!wf.target_site_name && !wf.device_family_filter && !wf.platform_filter && !wf.model_name &&
                                                 <span className="text-gray-400">No filters</span>
                                             }
                                         </td>
@@ -208,7 +214,7 @@ const ZTPManagement = () => {
                                         <td className="p-4">
                                             <div className="flex items-center gap-2">
                                                 <div className="flex-1 bg-gray-200 rounded-full h-2 overflow-hidden min-w-[80px]">
-                                                    <div 
+                                                    <div
                                                         className={`h-full transition-all duration-300 ${successRate > 80 ? 'bg-green-600' : successRate > 50 ? 'bg-blue-600' : 'bg-amber-600'}`}
                                                         style={{ width: `${successRate}%` }}
                                                     />
@@ -286,8 +292,8 @@ const ZTPManagement = () => {
                         <form onSubmit={handleCreate} className="p-6 space-y-4">
                             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
                                 <p className="text-sm text-blue-900">
-                                    <strong>How it works:</strong> Devices will call the ZTP endpoint with their credentials. 
-                                    Device calls webhook with credentials → SWIM checks IOS version → Auto-upgrades if not running golden image 
+                                    <strong>How it works:</strong> Devices will call the ZTP endpoint with their credentials.
+                                    Device calls webhook with credentials → SWIM checks IOS version → Auto-upgrades if not running golden image
                                     using the model's golden image.
                                 </p>
                             </div>
@@ -442,6 +448,90 @@ const ZTPManagement = () => {
                                 </button>
                             </div>
                         </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Token Info Modal */}
+            {tokenData && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full">
+                        <div className="p-6 border-b border-gray-200 flex justify-between items-center">
+                            <h2 className="text-xl font-bold text-gray-800">Webhook Connection Info</h2>
+                            <button onClick={() => setTokenData(null)} className="text-gray-400 hover:text-gray-600">
+                                <X size={24} />
+                            </button>
+                        </div>
+                        <div className="p-6 space-y-4">
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-1">Webhook URL</label>
+                                <div className="bg-gray-50 p-3 rounded border border-gray-200 font-mono text-sm break-all text-gray-700 select-all">
+                                    {tokenData.webhook_url}
+                                </div>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-1">Webhook Token</label>
+                                <div className="flex items-center gap-2">
+                                    <div className="bg-gray-50 p-3 rounded border border-gray-200 font-mono text-sm break-all text-gray-700 flex-1">
+                                        ********************************
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="pt-2 text-xs text-gray-500">
+                                Devices provisioned: <strong>{tokenData.total_devices}</strong>
+                            </div>
+
+                            {/* Device List Table */}
+                            {tokenData.devices && tokenData.devices.length > 0 && (
+                                <div className="mt-4">
+                                    <h3 className="text-sm font-semibold text-gray-700 mb-2">Recent Provisioning Attempts</h3>
+                                    <div className="border border-gray-200 rounded-lg overflow-hidden max-h-60 overflow-y-auto">
+                                        <table className="w-full text-left text-xs">
+                                            <thead className="bg-gray-50 text-gray-500 font-semibold border-b border-gray-100">
+                                                <tr>
+                                                    <th className="p-2">Device</th>
+                                                    <th className="p-2">IP</th>
+                                                    <th className="p-2">Status</th>
+                                                    <th className="p-2">Message</th>
+                                                    <th className="p-2">Time</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-gray-50">
+                                                {tokenData.devices.map((device) => (
+                                                    <tr key={device.job_id} className="hover:bg-gray-50">
+                                                        <td className="p-2 font-medium">
+                                                            <a href={`/jobs/${device.job_id}`} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                                                                {device.hostname}
+                                                            </a>
+                                                        </td>
+                                                        <td className="p-2 text-gray-600">{device.ip_address}</td>
+                                                        <td className="p-2">
+                                                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${device.status === 'success' ? 'bg-green-100 text-green-700' :
+                                                                device.status === 'failed' ? 'bg-red-100 text-red-700' :
+                                                                    'bg-blue-100 text-blue-700'
+                                                                }`}>
+                                                                {device.status}
+                                                            </span>
+                                                        </td>
+                                                        <td className="p-2 text-gray-500 truncate max-w-[150px]" title={device.message}>
+                                                            {device.message}
+                                                        </td>
+                                                        <td className="p-2 text-gray-400">
+                                                            {new Date(device.timestamp).toLocaleString()}
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                        <div className="p-4 border-t border-gray-200 flex justify-end">
+                            <button onClick={() => setTokenData(null)} className="px-4 py-2 bg-gray-100 text-gray-700 rounded hover:bg-gray-200 font-medium">
+                                Close
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}

@@ -21,12 +21,13 @@ class CoreConfig(AppConfig):
                 logger = logging.getLogger(__name__)
                 logger.error(f"Failed to import LDAP signals: {e}")
         
-        # Avoid running scheduler during migrations or if autoreload mimics double run
+        # Start the background scheduler for scheduled jobs
         import os
-        if os.environ.get('RUN_MAIN', None) != 'true':
-            # This check helps avoid running twice in dev server reloader
-            # But we still want signals registered above
-            return
-            
-        from .scheduler import start_scheduler
-        start_scheduler()
+        run_main = os.environ.get('RUN_MAIN', None)
+        
+        # In dev server with reloader: RUN_MAIN='true' on the reloaded process
+        # In production (gunicorn): RUN_MAIN is never set
+        # We want to start scheduler in both cases, but avoid double-start in dev
+        if run_main == 'true' or run_main is None:
+            from .scheduler import start_scheduler
+            start_scheduler()
