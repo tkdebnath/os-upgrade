@@ -114,11 +114,8 @@ Look at `catalyst9300_strategy.py` as an example.
 
 ## Common Issues
 
-**Job stuck?**
-Check celery worker logs:
-```bash
-docker compose logs celery-worker
-```
+**Job stuck or scheduled time passed?**
+Known bug until that is resolved used execute now to run the job.
 
 **Device unreachable?**
 Verify credentials in device settings or Global Credentials.
