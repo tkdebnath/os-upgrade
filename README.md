@@ -95,6 +95,11 @@ Groups auto-create on login. See [README_LDAP.md](README_LDAP.md).
 
 ## Device Support
 
+Support for new models is easy to add. 
+- update supported_models.env
+- create a strategy in:
+`swim_backend/core/services/workflow/activation_strategies/`
+
 Currently handles:
 - **Catalyst 9300** - Install mode, stack reloads
 - **ASR1K/9K** - Lab devices (adjust timeout if needed)
